@@ -187,7 +187,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     const slack = Math.max(1, 3 / camera.zoom);
     for (const [id, h] of renderer.heads) {
       if (!h.visible || id === VISITOR_ID) continue;
-      if (w.x < h.bx - slack || w.x > h.bx + h.bw + slack || w.y < h.by - slack || w.y > h.by + h.bh + slack) continue;
+      if (w.x < h.bx - slack || w.x > h.bx + h.bw + slack || w.y < h.by - 26 - slack || w.y > h.by + h.bh + slack) continue;
       if (h.depth > bestDepth) {
         bestDepth = h.depth;
         best = id;

@@ -447,8 +447,12 @@ export class Office {
     if (artifact) {
       rec.info.pendingArtifact = artifact;
       this.setStatus(id, 'waiting', tr('aprovar artifact com o CEO'));
+      this.notice('alert', id, 'alert', tr('👑 {0} precisa de aprovação do CEO para {1}', [rec.info.name, artifact.name ?? artifact.id]), rec.info.roomId);
     } else {
       delete rec.info.pendingArtifact;
+      if (rec.info.status === 'waiting') {
+        this.setStatus(id, 'working');
+      }
     }
     this.markDirty();
   }

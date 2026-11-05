@@ -73,7 +73,7 @@ export class Toasts implements UiComponent {
       const a = this.ctx.agent(t.notice.agentId);
       if (!a || a.status !== 'waiting') this.dismiss(t);
       // O pedido pode chegar (pelo hook) depois do aviso: o atalho aparece quando ele existe.
-      else if (t.answer) setHidden(t.answer, !a.permission);
+      else if (t.answer) setHidden(t.answer, !a.permission && !a.pendingArtifact);
     }
   }
 
@@ -95,7 +95,15 @@ export class Toasts implements UiComponent {
     const toast: Toast = { key, notice: n, el, count, repeats: 1, timer: null, remaining: 0, startedAt: 0 };
     if (n.level === 'alert' && n.agentId) {
       const id = n.agentId;
-      toast.answer = h('button', { class: 'ui-toast__answer', type: 'button', text: tr('Responder'), title: tr('Responder pelo escritório (aprovar, recusar ou responder a pergunta)'), hidden: !agent?.permission, on: { click: () => focusPermission(this.ctx, id) } });
+      const isArtifact = !!agent?.pendingArtifact;
+      toast.answer = h('button', {
+        class: 'ui-toast__answer',
+        type: 'button',
+        text: isArtifact ? tr('Aprovar') : tr('Responder'),
+        title: isArtifact ? tr('Aprovar pelo CEO') : tr('Responder pelo escritório (aprovar, recusar ou responder a pergunta)'),
+        hidden: !agent?.permission && !agent?.pendingArtifact,
+        on: { click: () => this.ctx.select({ type: 'agent', id }, { focus: true }) },
+      });
       el.append(toast.answer);
     }
     el.append(iconButton(ICONS.close, tr('Fechar aviso'), () => this.dismiss(toast), 'ui-icon-btn--sm ui-toast__close'));

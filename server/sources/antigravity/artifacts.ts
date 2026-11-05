@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PendingArtifact } from '../../../shared/types';
 
@@ -16,6 +16,7 @@ export interface ArtifactScannerOptions {
 export class ArtifactScanner {
   private approved = new Set<string>();
   private readonly approvalsPath?: string;
+  private lastMtime = 0;
 
   constructor(opts: ArtifactScannerOptions = {}) {
     this.approvalsPath = opts.approvalsPath;
@@ -25,6 +26,9 @@ export class ArtifactScanner {
   loadApprovals(): void {
     if (!this.approvalsPath || !existsSync(this.approvalsPath)) return;
     try {
+      const stat = statSync(this.approvalsPath);
+      if (stat.mtimeMs <= this.lastMtime && this.approved.size > 0) return;
+      this.lastMtime = stat.mtimeMs;
       const data = JSON.parse(readFileSync(this.approvalsPath, 'utf8'));
       if (Array.isArray(data)) {
         this.approved = new Set(data);
@@ -38,22 +42,41 @@ export class ArtifactScanner {
     if (!this.approvalsPath) return;
     try {
       writeFileSync(this.approvalsPath, JSON.stringify([...this.approved], null, 2), 'utf8');
+      if (existsSync(this.approvalsPath)) {
+        this.lastMtime = statSync(this.approvalsPath).mtimeMs;
+      }
     } catch {
       // ignore
     }
   }
 
   approve(sessionId: string, artifactName: string): void {
+    this.loadApprovals();
+    const baseName = artifactName.replace(/\.md$/, '');
     this.approved.add(`${sessionId}:${artifactName}`);
+    this.approved.add(`${sessionId}:${baseName}`);
     this.approved.add(artifactName);
+    this.approved.add(baseName);
     this.saveApprovals();
   }
 
+  reject(sessionId: string, artifactName: string): void {
+    this.approve(sessionId, artifactName);
+  }
+
   isApproved(sessionId: string, artifactName: string): boolean {
-    return this.approved.has(`${sessionId}:${artifactName}`) || this.approved.has(artifactName);
+    this.loadApprovals();
+    const baseName = artifactName.replace(/\.md$/, '');
+    return (
+      this.approved.has(`${sessionId}:${artifactName}`) ||
+      this.approved.has(`${sessionId}:${baseName}`) ||
+      this.approved.has(artifactName) ||
+      this.approved.has(baseName)
+    );
   }
 
   scanSession(sessionId: string, sessionBrainDir: string): PendingArtifact | undefined {
+    this.loadApprovals();
     if (!existsSync(sessionBrainDir)) return undefined;
     try {
       const entries = readdirSync(sessionBrainDir);

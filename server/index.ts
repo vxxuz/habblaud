@@ -148,8 +148,9 @@ const codex = codexDirs.length ? new CodexSource({ accounts, office, dirs: codex
 if (codex) agents.add(codex);
 // Fonte do Google Antigravity (sources/antigravity/): quando a pasta existe
 const antigravityDir = getAntigravityHome(process.env, config.home);
+const ceoScanner = new ArtifactScanner({ approvalsPath: join(antigravityDir, 'approved_artifacts.json') });
 const antigravity = config.antigravity && existsSync(antigravityDir)
-  ? new AntigravitySource({ accounts, office, antigravityDir, env: process.env })
+  ? new AntigravitySource({ accounts, office, antigravityDir, env: process.env, scanner: ceoScanner })
   : undefined;
 if (antigravity) agents.add(antigravity);
 // Eventos dos hooks do Codex (POST /api/codex/events, mod/habblaud-codex/hook.mjs): vão para a fonte do Codex ao vivo
@@ -322,8 +323,7 @@ const messages = config.messages
     })
   : undefined;
 late.messages = messages;
-const ceoScanner = new ArtifactScanner({ approvalsPath: join(antigravityDir, 'approved_artifacts.json') });
-const ceoRoutes = createCeoRoutes({ scanner: ceoScanner, office, messages });
+const ceoRoutes = createCeoRoutes({ scanner: ceoScanner, office, messages, antigravityDir });
 
 // Terminal interativo (abrir/assumir sessões e encerrar agentes): opt-in com HABBLAUD_PTY=1 (ou agy detectado), só com bind local, fora
 // do Docker, com node-pty e o executável do claude ou agy no PATH.

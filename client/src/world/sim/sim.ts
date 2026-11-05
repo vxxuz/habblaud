@@ -281,6 +281,7 @@ export class Sim {
     const prevStatus = ch.info.status;
     const hadShells = !!ch.info.shells?.length;
     const prevLook = lookSig(ch.info);
+    const prevArtifact = ch.info.pendingArtifact?.id;
     ch.info = a;
     if (lookSig(a) !== prevLook) {
       try {
@@ -317,7 +318,6 @@ export class Sim {
     }
     // shells mudam sem mudar o status (ex.: comando em primeiro plano começou/terminou)
     if (prevStatus !== a.status || hadShells || !!a.shells?.length || ch.mode === 'shell' || this.forcedOffline.has(ch.id)) this.refreshMode(ch);
-    const prevArtifact = ch.info.pendingArtifact?.id;
     const nextArtifact = a.pendingArtifact?.id;
     if (prevArtifact !== nextArtifact) this.interrupt(ch);
     this.refreshShell(ch, now);

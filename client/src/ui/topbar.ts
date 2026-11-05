@@ -206,8 +206,10 @@ export class TopBar implements UiComponent {
     const waiting = this.counters.get('waiting')!.el as HTMLButtonElement;
     waiting.classList.toggle('is-active', c.waiting > 0);
     waiting.disabled = c.waiting === 0;
-    // Pedidos que dá para responder por aqui (hook de permissão: permissões e perguntas): a dica diz quantos.
-    const answerable = permissionAgents(snap?.agents ?? []).length;
+    // Pedidos que dá para responder por aqui (hook de permissão ou aprovação de artifact do CEO): a dica diz quantos.
+    const permCount = permissionAgents(snap?.agents ?? []).length;
+    const ceoPendingCount = (snap?.agents ?? []).filter((a) => a.pendingArtifact && a.status !== 'offline').length;
+    const answerable = permCount + ceoPendingCount;
     waiting.classList.toggle('has-answer', answerable > 0);
     setTitle(
       waiting,
@@ -266,6 +268,11 @@ export class TopBar implements UiComponent {
     const sel = this.ctx.selection();
     const next = nextPermissionAgent(agents, sel?.type === 'agent' ? sel.id : undefined);
     if (next) return focusPermission(this.ctx, next.id);
+
+    // Prioriza agentes com artifact aguardando decisão do CEO
+    const ceoPending = agents.find((a) => a.pendingArtifact && a.status !== 'offline');
+    if (ceoPending) return this.ctx.select({ type: 'agent', id: ceoPending.id }, { focus: true });
+
     const first = waitingAgents(agents)[0];
     if (first) this.ctx.select({ type: 'agent', id: first.id }, { focus: true });
   }

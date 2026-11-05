@@ -31,6 +31,7 @@ export interface AntigravitySourceOptions {
   now?: () => number;
   pollMs?: number;
   detectOptions?: DetectOptions;
+  scanner?: ArtifactScanner;
 }
 
 interface TrackedSession {
@@ -74,7 +75,7 @@ export class AntigravitySource implements AgentSource {
     this.now = opts.now ?? Date.now;
     this.pollMs = opts.pollMs ?? 1000;
     this.detectOptions = opts.detectOptions;
-    this.artifactScanner = new ArtifactScanner({ approvalsPath: join(this.antigravityDir, 'approved_artifacts.json') });
+    this.artifactScanner = opts.scanner ?? new ArtifactScanner({ approvalsPath: join(this.antigravityDir, 'approved_artifacts.json') });
   }
 
   async start(): Promise<void> {
@@ -260,14 +261,18 @@ export class AntigravitySource implements AgentSource {
             this.office.addActivity(s.agentId, s.state.latestActivity, true);
           }
         }
-      } else {
-        this.office.setStatus(s.agentId, s.status, s.waitingFor);
       }
 
       // Check for pending artifacts requiring CEO approval
       const sessionBrainDir = join(this.brainDir, s.convId);
       const pending = this.artifactScanner.scanSession(s.convId, sessionBrainDir);
       this.office.setPendingArtifact(s.agentId, pending);
+
+      if (pending) {
+        this.office.setStatus(s.agentId, 'waiting', tr('aprovar artifact com o CEO'));
+      } else {
+        this.office.setStatus(s.agentId, s.status, s.waitingFor);
+      }
     }
 
     // 2. Mark removed sessions as offline

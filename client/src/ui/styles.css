@@ -6674,6 +6674,17 @@ html.is-replay #world {
   margin-top: 8px;
 }
 
+.ui-ceo__items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ui-ceo__item + .ui-ceo__item {
+  padding-top: 12px;
+  border-top: 1px dashed rgba(212, 175, 55, 0.3);
+}
+
 /* "Responder" no aviso de quem tem pedido para responder pelo escritório. */
 .ui-toast__answer {
   flex: none;
