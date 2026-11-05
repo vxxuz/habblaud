@@ -21,6 +21,7 @@ import {
   parseTranscriptLine,
   type AntigravitySessionState,
 } from './transcript';
+import { ArtifactScanner } from './artifacts';
 
 export interface AntigravitySourceOptions {
   accounts: AccountsService;
@@ -61,6 +62,7 @@ export class AntigravitySource implements AgentSource {
   private timer?: NodeJS.Timeout;
   private db?: DatabaseSync;
   private readonly sessions = new Map<string, TrackedSession>();
+  private readonly artifactScanner: ArtifactScanner;
 
   constructor(opts: AntigravitySourceOptions) {
     this.accounts = opts.accounts;
@@ -72,6 +74,7 @@ export class AntigravitySource implements AgentSource {
     this.now = opts.now ?? Date.now;
     this.pollMs = opts.pollMs ?? 1000;
     this.detectOptions = opts.detectOptions;
+    this.artifactScanner = new ArtifactScanner({ approvalsPath: join(this.antigravityDir, 'approved_artifacts.json') });
   }
 
   async start(): Promise<void> {
@@ -260,6 +263,11 @@ export class AntigravitySource implements AgentSource {
       } else {
         this.office.setStatus(s.agentId, s.status, s.waitingFor);
       }
+
+      // Check for pending artifacts requiring CEO approval
+      const sessionBrainDir = join(this.brainDir, s.convId);
+      const pending = this.artifactScanner.scanSession(s.convId, sessionBrainDir);
+      this.office.setPendingArtifact(s.agentId, pending);
     }
 
     // 2. Mark removed sessions as offline

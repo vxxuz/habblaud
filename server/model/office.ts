@@ -438,6 +438,21 @@ export class Office {
     this.markDirty();
   }
 
+  setPendingArtifact(id: string, artifact?: PendingArtifact): void {
+    const rec = this.agents.get(id);
+    if (!rec) return;
+    const prevId = rec.info.pendingArtifact?.id;
+    const nextId = artifact?.id;
+    if (prevId === nextId) return;
+    if (artifact) {
+      rec.info.pendingArtifact = artifact;
+      this.setStatus(id, 'waiting', tr('aprovar artifact com o CEO'));
+    } else {
+      delete rec.info.pendingArtifact;
+    }
+    this.markDirty();
+  }
+
   /**
    * Ocupado, mas o transcript não diz nada novo há um tempo (a última atividade é o fim do turno
    * anterior — ex.: esperando subagentes em segundo plano): mostra algo coerente com "trabalhando".

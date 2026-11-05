@@ -183,6 +183,10 @@ export interface AgentInfo {
    */
   permission?: PermissionRequestInfo;
   /**
+   * Artifact do Antigravity aguardando aprovação do CEO (requestFeedback: true).
+   */
+  pendingArtifact?: PendingArtifact;
+  /**
    * Dá para mandar mensagem a este agente pelo Habblaud (só principais): a sessão tem o plugin habblaud-mensagens
    * e perguntou pela caixa de entrada há pouco. Ver POST /api/messages.
    */
@@ -668,6 +672,17 @@ export interface PermissionAnswer {
   options?: number[];
   /** Texto livre ("Outro"). Sem multiSelect, vale no lugar de uma opção. */
   other?: string;
+}
+
+/**
+ * Artifact do Antigravity aguardando revisão e aprovação do CEO.
+ */
+export interface PendingArtifact {
+  id: string;
+  name: string;
+  summary?: string;
+  updatedAt?: number;
+  path: string;
 }
 
 /** Corpo de POST /api/permissions/:id/decision (vindo da página). */
