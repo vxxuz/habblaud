@@ -10,12 +10,26 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
-const DEFAULT_HOST = process.env.HABBLAUD_HOST || '127.0.0.1';
+const DEFAULT_BIND_HOST = process.env.HABBLAUD_HOST || '0.0.0.0';
+const CHECK_HOST = '127.0.0.1';
 const DEFAULT_PORT = Number(process.env.HABBLAUD_PORT || 4747);
 const HABBLAUD_DIR = path.join(os.homedir(), '.habblaud');
 const PID_FILE = path.join(HABBLAUD_DIR, 'server.pid');
 const LOG_FILE = path.join(HABBLAUD_DIR, 'server.log');
 const LOCK_FILE = path.join(HABBLAUD_DIR, 'autostart.lock');
+
+export function detectLanIp(): string | undefined {
+  const nets = os.networkInterfaces();
+  for (const list of Object.values(nets)) {
+    if (!list) continue;
+    for (const addr of list) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        return addr.address;
+      }
+    }
+  }
+  return undefined;
+}
 
 function resolveServerEntry(): string {
   const selfPath = fileURLToPath(import.meta.url);
@@ -30,7 +44,7 @@ function resolveProjectRoot(): string {
   return path.resolve(path.dirname(entry), '..', '..');
 }
 
-export function fetchSnapshot(host = DEFAULT_HOST, port = DEFAULT_PORT, timeoutMs = 1200): Promise<Record<string, unknown> | null> {
+export function fetchSnapshot(host = CHECK_HOST, port = DEFAULT_PORT, timeoutMs = 1200): Promise<Record<string, unknown> | null> {
   return new Promise((resolve) => {
     const req = http.get(
       {
@@ -92,11 +106,13 @@ function releaseLock(): void {
   }
 }
 
-export async function ensureHabblaudRunning(): Promise<{ running: boolean; startedNow: boolean; url: string; pid?: number }> {
-  const url = `http://${DEFAULT_HOST}:${DEFAULT_PORT}`;
+export async function ensureHabblaudRunning(): Promise<{ running: boolean; startedNow: boolean; url: string; lanUrl?: string; pid?: number }> {
+  const lanIp = detectLanIp();
+  const url = `http://127.0.0.1:${DEFAULT_PORT}`;
+  const lanUrl = lanIp ? `http://${lanIp}:${DEFAULT_PORT}` : undefined;
   const existing = await fetchSnapshot();
   if (existing) {
-    return { running: true, startedNow: false, url };
+    return { running: true, startedNow: false, url, lanUrl };
   }
 
   const gotLock = acquireLock();
@@ -110,7 +126,7 @@ export async function ensureHabblaudRunning(): Promise<{ running: boolean; start
         cwd,
         detached: true,
         stdio: ['ignore', logFd, logFd],
-        env: { ...process.env },
+        env: { ...process.env, HABBLAUD_HOST: DEFAULT_BIND_HOST },
       });
       child.unref();
       try {
@@ -133,17 +149,17 @@ export async function ensureHabblaudRunning(): Promise<{ running: boolean; start
         } catch {
           // ignore
         }
-        return { running: true, startedNow: gotLock, url, pid };
+        return { running: true, startedNow: gotLock, url, lanUrl, pid };
       }
     }
   } finally {
     if (gotLock) releaseLock();
   }
 
-  return { running: false, startedNow: false, url };
+  return { running: false, startedNow: false, url, lanUrl };
 }
 
-export async function restartHabblaudServer(): Promise<{ running: boolean; url: string; pid?: number }> {
+export async function restartHabblaudServer(): Promise<{ running: boolean; url: string; lanUrl?: string; pid?: number }> {
   try {
     if (fs.existsSync(PID_FILE)) {
       const pid = Number(fs.readFileSync(PID_FILE, 'utf8').trim());
@@ -160,7 +176,7 @@ export async function restartHabblaudServer(): Promise<{ running: boolean; url: 
   }
   await sleep(400);
   const res = await ensureHabblaudRunning();
-  return { running: res.running, url: res.url, pid: res.pid };
+  return { running: res.running, url: res.url, lanUrl: res.lanUrl, pid: res.pid };
 }
 
 export const MCP_TOOLS = [
