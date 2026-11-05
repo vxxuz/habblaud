@@ -219,6 +219,22 @@ describe('PtyManager: assumir', () => {
     expect(s.killPid).not.toHaveBeenCalled();
     expect(s.spawned).toHaveLength(0);
   });
+
+  it('assume uma sessão do Antigravity com --conversation', async () => {
+    const s = setup({
+      agyBin: process.execPath,
+      agent: {
+        id: `antigravity:${SESSION}`,
+        account: 'antigravity:default',
+      },
+      accounts: () => [{ id: 'antigravity:default', dir: tmpdir(), isDefault: true }],
+    });
+
+    const info = await s.manager.takeover(`antigravity:${SESSION}`);
+    expect(info.resumed).toBe(SESSION);
+    expect(s.spawned.length).toBe(1);
+    expect(s.spawned[0]?.args).toEqual(['--conversation', SESSION]);
+  });
 });
 
 /** Resposta SSE de mentira: guarda o que foi escrito. */

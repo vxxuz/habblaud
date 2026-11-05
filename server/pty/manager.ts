@@ -71,6 +71,7 @@ export interface PtyManagerOptions {
   /** Por que o recurso está desligado (quando `spawn` é null). */
   disabledReason?: string;
   claudeBin: string;
+  agyBin?: string;
   accounts: () => PtyAccount[];
   agent: (id: string) => PtyAgentRef | undefined;
   onChange: () => void;
@@ -270,6 +271,11 @@ export class PtyManager {
     if (!agent.cwd) throw new PtyError(409, tr('não sei a pasta desta sessão'));
     // As outras tomadas em andamento já têm uma vaga prometida.
     const plan = this.plan({ cwd: agent.cwd, account: agent.account, cols: size.cols, rows: size.rows }, this.takeovers.size - 1);
+    if (agent.account.startsWith('antigravity:') || agent.id.startsWith('antigravity:')) {
+      const info = this.spawn(plan, { resume: agent.sessionId, from: agentId });
+      log.info(tr('Agente Antigravity {0} assumido pelo escritório (sessão {1}).', [agentId, agent.sessionId]));
+      return info;
+    }
     const ext = await this.external(agentId);
     try {
       await this.killPid(ext.pid, ext.proc);
@@ -372,9 +378,11 @@ export class PtyManager {
   /** Valida o pedido de uma sessão nova (`reserved`: vagas já prometidas a tomadas em andamento). */
   private plan(p: { cwd: unknown; account?: unknown; cols?: unknown; rows?: unknown }, reserved = 0): SpawnPlan {
     if (!this.opts.spawn) throw new PtyError(503, tr('terminal desligado: {0}', [this.opts.disabledReason ?? tr('indisponível')]));
-    // Antes de tudo (o "assumir" encerra a sessão de lá depois daqui): um claude que não roda abriria um terminal que
+    // Antes de tudo (o "assumir" encerra a sessão de lá depois daqui): um executável que não roda abriria um terminal que
     // sai na hora.
-    if (!isExecutableFile(this.opts.claudeBin)) throw new PtyError(503, tr('o executável do Claude Code não roda: {0} (confira o HABBLAUD_CLAUDE_BIN)', [this.opts.claudeBin]));
+    const isAgy = (typeof p.account === 'string' && p.account.startsWith('antigravity:')) || (!this.opts.claudeBin && !!this.opts.agyBin);
+    const binToRun = isAgy && this.opts.agyBin ? this.opts.agyBin : this.opts.claudeBin;
+    if (!binToRun || !isExecutableFile(binToRun)) throw new PtyError(503, tr('o executável não roda: {0}', [binToRun ?? 'CLI']));
     if (typeof p.cwd !== 'string' || !isAbsolute(p.cwd)) throw new PtyError(400, tr('informe a pasta do projeto (caminho absoluto)'));
     const cwd = resolve(p.cwd);
     let isDir = false;
@@ -402,11 +410,15 @@ export class PtyManager {
     else env.CLAUDE_CONFIG_DIR = account.dir;
 
     let proc: PtyProcess;
+    const isAgy = account.id.startsWith('antigravity:') || (!this.opts.claudeBin && !!this.opts.agyBin);
+    const binToRun = isAgy && this.opts.agyBin ? this.opts.agyBin : this.opts.claudeBin;
     try {
-      const args = p.resume ? ['--resume', p.resume] : [];
-      proc = spawn(this.opts.claudeBin, args, { cwd, cols, rows, env });
+      const args = isAgy
+        ? (p.resume ? ['--conversation', p.resume] : [])
+        : (p.resume ? ['--resume', p.resume] : []);
+      proc = spawn(binToRun, args, { cwd, cols, rows, env });
     } catch (err) {
-      throw new PtyError(500, tr('não consegui abrir o Claude Code: {0}', [errMsg(err)]));
+      throw new PtyError(500, tr('não consegui abrir o terminal: {0}', [errMsg(err)]));
     }
     const id = `p${++this.seq}-${proc.pid}`;
     const info: PtyInfo = { id, pid: proc.pid, cwd, account: account.id, agentId: `${account.id}:${proc.pid}`, startedAt: this.now() };
