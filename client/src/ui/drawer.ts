@@ -210,6 +210,7 @@ class AgentView {
   private codexHint: HTMLElement;
   private roomBtn: HTMLButtonElement;
   private roomName: HTMLElement;
+  private moveRoomBtn: HTMLButtonElement;
   private gone: HTMLElement;
   private dot: HTMLElement;
   private statusText: HTMLElement;
@@ -284,13 +285,33 @@ class AgentView {
     this.accEmail = h('span', { class: 'ui-hero__acc-email' });
     this.roomName = h('span');
     this.roomBtn = h('button', { class: 'ui-room-link', type: 'button', on: { click: () => this.last && ctx.select({ type: 'room', id: this.last.roomId }, { focus: true }) } }, this.roomName);
+    this.moveRoomBtn = h('button', {
+      class: 'ui-btn ui-btn--sm',
+      type: 'button',
+      hidden: true,
+      style: 'margin-left: 6px; padding: 2px 8px; font-size: 11px;',
+      on: {
+        click: () => {
+          const a = this.last;
+          if (!a || a.kind !== 'main') return;
+          const rooms = this.ctx.store.snapshot?.rooms ?? [];
+          const other = rooms.find((r) => r.id !== a.roomId);
+          if (!other) return;
+          void fetch('/api/agents/move-room', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId: a.id, roomId: other.id }),
+          }).catch(() => {});
+        },
+      },
+    });
     this.character = new CharacterEditor(ctx);
     const heroText = h(
       'div',
       { class: 'ui-hero__text' },
       h('div', { class: 'ui-hero__line' }, this.name, this.character.button, this.role),
       h('div', { class: 'ui-hero__acc' }, this.accChip, this.accName, this.accProv, this.accEmail),
-      h('div', { class: 'ui-hero__where' }, h('span', { class: 'ui-muted', text: tr('Sala') }), this.roomBtn),
+      h('div', { class: 'ui-hero__where' }, h('span', { class: 'ui-muted', text: tr('Sala') }), this.roomBtn, this.moveRoomBtn),
     );
     this.gone = h('p', { class: 'ui-gone', text: tr('Este agente já saiu do escritório.'), hidden: true });
 
@@ -544,9 +565,11 @@ class AgentView {
     this.character.render(a, !!live);
     setText(this.role, roleLabel(a));
     setVariant(this.role, 'ui-role--', a.kind);
-    setText(this.title, a.title ?? '');
-    setHidden(this.title, !a.title);
-    setTitle(this.title, a.title ?? '');
+    const jobdeskRaw = a.title?.trim() || (a.kind === 'main' && a.role && a.role !== 'Agente principal' && a.role !== 'Main agent' ? a.role.trim() : '');
+    const jobdeskDisplay = jobdeskRaw && this.id !== 'ceo:inok' ? (a.kind === 'main' ? `Jobdesk: "${jobdeskRaw}"` : jobdeskRaw) : (a.title ?? '');
+    setText(this.title, jobdeskDisplay);
+    setHidden(this.title, !jobdeskDisplay);
+    setTitle(this.title, jobdeskDisplay);
     updateAccountChip(this.accChip, account, a.account, a.provider);
     setText(this.accName, account?.name ?? a.account);
     updateProviderTag(this.accProv, provider, account?.name ?? '');
@@ -556,6 +579,13 @@ class AgentView {
     setHidden(this.accEmail, !accSub);
     setText(this.roomName, room?.name ?? a.roomId);
     setTitle(this.roomBtn, room ? tr('{0}\nClique para ver a sala', [room.path]) : '');
+    const otherRoom = (this.ctx.store.snapshot?.rooms ?? []).find((r) => r.id !== a.roomId);
+    const canMoveRoom = !!live && a.kind === 'main' && this.id !== 'ceo:inok' && !!otherRoom;
+    setHidden(this.moveRoomBtn, !canMoveRoom);
+    if (canMoveRoom && otherRoom) {
+      setText(this.moveRoomBtn, `→ ${otherRoom.name}`);
+      setTitle(this.moveRoomBtn, `Move ${a.name} to ${otherRoom.name}`);
+    }
     setHidden(this.gone, !!live);
     this.el.classList.toggle('is-gone', !live);
 

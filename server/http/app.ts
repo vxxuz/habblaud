@@ -657,6 +657,24 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       }
       return true;
     }
+    if (path === '/api/agents/move-room') {
+      if (method !== 'POST') methodNotAllowed(res, 'POST');
+      else
+        readJson(req)
+          .then((body) => {
+            const b = body as { agentId?: unknown; roomId?: unknown };
+            if (typeof b?.agentId !== 'string' || typeof b?.roomId !== 'string' || !b.agentId.trim() || !b.roomId.trim()) {
+              throw new HttpError(400, 'Expected {agentId, roomId}');
+            }
+            const agentId = b.agentId.trim();
+            const roomId = b.roomId.trim();
+            const ok = office.moveAgentRoom(agentId, roomId);
+            if (!ok) throw new HttpError(404, tr('agente não encontrado'));
+            sendJson(res, 200, { ok: true, agentId, roomId });
+          })
+          .catch((err) => fail(res, err));
+      return true;
+    }
     if (path.startsWith('/api/agents/')) {
       if (!isRead) {
         methodNotAllowed(res, 'GET');

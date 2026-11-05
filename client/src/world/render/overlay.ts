@@ -267,7 +267,16 @@ export class Overlay {
     this.placed.push(x, y, w, h);
   }
 
-  draw(now: number, opts: WorldOptions, sel: { agent: string | null; room: string | null; hover: string | null }): void {
+  draw(
+    now: number,
+    opts: WorldOptions,
+    sel: {
+      agent: string | null;
+      room: string | null;
+      hover: string | null;
+      drag?: { agentId: string; sx: number; sy: number; targetRoomId: string | null } | null;
+    },
+  ): void {
     const { ctx, camera } = this;
     const dpr = camera.dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -363,7 +372,81 @@ export class Overlay {
     }
     this.drawChats(now);
     this.drawFloaters(now);
+    if (sel.drag) this.drawDragOverlay(sel.drag, now);
     ctx.textBaseline = 'alphabetic';
+  }
+
+  private drawDragOverlay(drag: { agentId: string; sx: number; sy: number; targetRoomId: string | null }, now: number): void {
+    const { ctx } = this;
+    const ch = this.sim.chars.get(drag.agentId);
+    if (!ch) return;
+
+    // Highlight target room
+    if (drag.targetRoomId) {
+      const room = this.sim.rooms.get(drag.targetRoomId);
+      if (room && room.present) {
+        const r = room.layout.rect;
+        const ax = this.sx(r.x * TILE);
+        const ay = this.sy(r.y * TILE);
+        const bx = this.sx((r.x + r.w) * TILE);
+        const by = this.sy((r.y + r.h) * TILE);
+        const isNewRoom = drag.targetRoomId !== ch.roomId;
+        ctx.save();
+        ctx.strokeStyle = isNewRoom ? '#4aa8e8' : room.theme.accent;
+        ctx.fillStyle = isNewRoom ? 'rgba(74, 168, 232, 0.12)' : 'rgba(255, 255, 255, 0.05)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 4]);
+        ctx.lineDashOffset = -(now / 30) % 10;
+        ctx.beginPath();
+        ctx.roundRect(ax - 2, ay - 2, bx - ax + 4, by - ay + 4, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Connector line from character head to cursor
+    const head = this.renderer.heads.get(drag.agentId);
+    if (head && head.visible) {
+      const hx = this.sx(head.x);
+      const hy = this.sy(head.y);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(74, 168, 232, 0.85)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(drag.sx, drag.sy);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Floating badge near cursor
+    const targetRoom = drag.targetRoomId ? this.sim.rooms.get(drag.targetRoomId) : undefined;
+    const label = targetRoom
+      ? drag.targetRoomId === ch.roomId
+        ? `${ch.info.name} (${targetRoom.info.name})`
+        : `Move ${ch.info.name} → ${targetRoom.info.name}`
+      : `Drag ${ch.info.name} to Office 1 or Office 2`;
+    const tw = this.measure(BUBBLE_FONT, label);
+    const w = Math.round(tw + 20);
+    const h = 24;
+    const x = Math.max(6, Math.min(this.camera.viewW - w - 6, Math.round(drag.sx - w / 2)));
+    const y = Math.max(6, Math.round(drag.sy - h - 14));
+    ctx.save();
+    ctx.fillStyle = 'rgba(18, 96, 140, 0.95)';
+    ctx.strokeStyle = '#4aa8e8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = BUBBLE_FONT;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x + w / 2, y + h / 2 + 0.5);
+    ctx.textAlign = 'left';
+    ctx.restore();
   }
 
   /** Quem senta virado para a câmera atrás de uma mesa: a etiqueta nos pés cobriria a tela do colega. */
@@ -972,6 +1055,26 @@ export class Overlay {
       ctx.font = BADGE_FONT;
       ctx.fillStyle = '#e8ecf5';
       ctx.fillText(CODEX_BADGE, cx + 3.5, y + h / 2 + 0.5);
+    }
+    const hovered = sel.hover === ch.id;
+    if ((selected || hovered) && ch !== this.sim.ceo && ch !== this.sim.visitor) {
+      const rawJob = (ch.info.title?.trim() || ch.info.role?.trim() || '');
+      if (rawJob && rawJob !== 'Agente principal' && rawJob !== 'Main agent') {
+        const jobText = this.fit(CORE_FONT_SMALL, `Jobdesk: "${rawJob}"`, 220);
+        const jw = Math.round(this.measure(CORE_FONT_SMALL, jobText) + 12);
+        const jh = 14;
+        const jx = Math.round(x + w / 2 - jw / 2);
+        const jy = y + h + 2;
+        ctx.fillStyle = 'rgba(16, 20, 32, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(jx, jy, jw, jh, 5);
+        ctx.fill();
+        ctx.font = CORE_FONT_SMALL;
+        ctx.fillStyle = '#9ecbff';
+        ctx.textAlign = 'center';
+        ctx.fillText(jobText, jx + jw / 2, jy + jh / 2 + 0.5);
+        ctx.textAlign = 'left';
+      }
     }
   }
 }

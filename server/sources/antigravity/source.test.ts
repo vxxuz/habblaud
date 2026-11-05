@@ -111,6 +111,8 @@ describe('AntigravitySource Integration', () => {
     expect(agent.id).toBe(`antigravity:${convId}`);
     expect(agent.provider).toBe('antigravity');
     expect(agent.roomId).toBe('/home/inok/test-proj');
+    expect(agent.role).toBe('Main Project Task');
+    expect(agent.title).toBe('Main Project Task');
     expect(agent.status).toBe('working');
 
     // Check transcript path

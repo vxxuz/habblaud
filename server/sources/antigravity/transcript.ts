@@ -10,6 +10,7 @@ export interface AntigravitySessionState {
   outputTokens: number;
   latestActivity?: Activity;
   lastStepIndex: number;
+  firstUserPrompt?: string;
 }
 
 export function createAntigravitySessionState(conversationId: string): AntigravitySessionState {
@@ -165,6 +166,11 @@ export function parseTranscriptLine(line: string, state: AntigravitySessionState
   if (step.type === 'USER_INPUT') {
     state.status = 'working';
     state.waitingFor = undefined;
+    if (typeof step.content === 'string' && !state.firstUserPrompt) {
+      const m = /<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i.exec(step.content);
+      const raw = (m ? m[1] : step.content).trim().replace(/\s+/g, ' ');
+      if (raw) state.firstUserPrompt = raw.slice(0, 80);
+    }
     const act: Activity = {
       id: `prompt-${state.stepCount}`,
       kind: 'prompt',

@@ -75,7 +75,10 @@ export function updateAgentRow(
   setText(r.name, agent.name);
   updateAccountChip(r.chip, account, agent.account, agent.provider);
   updateRoleBadge(r.role, agent);
-  const title = agent.title?.trim() ?? '';
+  const rawJobdesk =
+    agent.title?.trim() ||
+    (agent.kind === 'main' && agent.role && agent.role !== 'Agente principal' && agent.role !== 'Main agent' ? agent.role.trim() : '');
+  const title = rawJobdesk ? (agent.kind === 'main' ? `Jobdesk: "${rawJobdesk}"` : rawJobdesk) : '';
   setText(r.task, title);
   setTitle(r.task, title);
   setHidden(r.task, !title);

@@ -796,4 +796,62 @@ describe('Office: personagem do projeto', () => {
     office.switchSession('acc:2', 's2b');
     expect(names.character('/p/api')?.owner).toBe('s2b');
   });
+
+  it('twoOffices mode creates Office 1 and Office 2, auto-balances agents, sets jobdesk, and moves rooms', () => {
+    let clock = 1_000_000;
+    const saved = new Map<string, string>();
+    const office = new Office({
+      names: new NameStore(null),
+      twoOffices: true,
+      agentRooms: {
+        get: (k) => saved.get(k),
+        set: (k, v) => void saved.set(k, v),
+      },
+      version: 't',
+      startedAt: clock,
+      accounts: () => [],
+      sources: () => [],
+      accountName: () => 'Account C',
+      now: () => clock,
+    });
+
+    const snap0 = office.commit().snapshot;
+    expect(snap0.rooms.map((r) => ({ id: r.id, name: r.name, slot: r.slot }))).toEqual([
+      { id: 'office-1', name: 'Office 1', slot: 0 },
+      { id: 'office-2', name: 'Office 2', slot: 1 },
+    ]);
+
+    // Auto-balance first 3 agents across Office 1 and Office 2
+    office.addMain({ id: 'ag:1', account: 'acc', sessionId: 's1', cwd: '/proj/a', role: 'Build UI', title: 'Build UI', startedAt: clock, status: 'working' });
+    office.addMain({ id: 'ag:2', account: 'acc', sessionId: 's2', cwd: '/proj/b', role: 'Fix API', title: 'Fix API', startedAt: clock, status: 'working' });
+    office.addMain({ id: 'ag:3', account: 'acc', sessionId: 's3', cwd: '/proj/c', role: 'Write Tests', title: 'Write Tests', startedAt: clock, status: 'working' });
+
+    expect(office.get('ag:1')?.roomId).toBe('office-1');
+    expect(office.get('ag:2')?.roomId).toBe('office-2');
+    expect(office.get('ag:3')?.roomId).toBe('office-1');
+    expect(office.agentCwd('ag:1')).toBe('/proj/a');
+
+    // Subagent follows parent room
+    office.addSub({ id: 'ag:1:sub', parentId: 'ag:1', sessionId: 's1-sub', role: 'Explorer', background: false, startedAt: clock });
+    expect(office.get('ag:1:sub')?.roomId).toBe('office-1');
+
+    // Move ag:1 from office-1 to office-2 (drag-and-drop)
+    expect(office.moveAgentRoom('ag:1', 'office-2')).toBe(true);
+    expect(office.get('ag:1')?.roomId).toBe('office-2');
+    expect(office.get('ag:1:sub')?.roomId).toBe('office-2');
+    expect(saved.get('s1')).toBe('office-2');
+
+    // Update Jobdesk dynamically
+    office.setJobdesk('ag:1', 'Refactored Session Jobdesk');
+    expect(office.get('ag:1')?.role).toBe('Refactored Session Jobdesk');
+    expect(office.get('ag:1')?.title).toBe('Refactored Session Jobdesk');
+
+    // Even if all agents leave, Office 1 and Office 2 remain
+    office.closeMain('ag:1');
+    office.closeMain('ag:2');
+    office.closeMain('ag:3');
+    clock += OFFLINE_GRACE_MS + 1000;
+    office.tick();
+    expect(office.commit().snapshot.rooms.map((r) => r.id)).toEqual(['office-1', 'office-2']);
+  });
 });

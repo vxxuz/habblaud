@@ -52,10 +52,22 @@ export const SNAPSHOT_RECENT = 8;
 const HISTORY_LIMIT = 200;
 const FEED_LIMIT = 200;
 
+export const FIXED_OFFICES = [
+  { id: 'office-1', name: 'Office 1', path: 'Office 1', slot: 0 },
+  { id: 'office-2', name: 'Office 2', path: 'Office 2', slot: 1 },
+] as const;
+
 export interface OfficeDeps {
   names: NameStore;
   /** Nome escolhido pelo usuário para a sala da pasta (model/room-aliases.ts), se houver. */
   roomAlias?: (path: string) => string | undefined;
+  /** Two fixed offices mode (Office 1 and Office 2), auto-balancing agents and allowing room moves. */
+  twoOffices?: boolean;
+  /** Persistent room assignment per session/agent when twoOffices is active. */
+  agentRooms?: {
+    get(key: string): string | undefined;
+    set(key: string, roomId: string): void;
+  };
   version: string;
   /** Build do cliente servido (ver OfficeSnapshot.meta.build); ausente no modo dev e nos testes. */
   build?: () => string | undefined;
@@ -104,6 +116,7 @@ export interface MainInput {
   sessionId: string;
   cwd: string;
   role: string;
+  title?: string;
   startedAt: number;
   status: AgentStatus;
   waitingFor?: string;
@@ -121,6 +134,7 @@ export interface SubInput {
 
 interface AgentRecord {
   info: AgentInfo;
+  cwd?: string;
   history: Activity[];
   removeAt?: number;
   /** Início do turno atual (para "Concluiu em X"). */
@@ -220,6 +234,9 @@ export class Office {
 
   constructor(private readonly deps: OfficeDeps) {
     this.now = deps.now ?? Date.now;
+    if (this.deps.twoOffices) {
+      this.seedFixedOffices(this.deps.startedAt);
+    }
   }
 
   /** Avisado (síncrono) sempre que algo muda; o hub decide quando fazer commit(). */
@@ -292,6 +309,11 @@ export class Office {
     return this.rooms.get(roomId)?.path;
   }
 
+  /** Caminho real do projeto de um agente principal (mesmo no modo de duas salas fixas). */
+  agentCwd(id: string): string | undefined {
+    return this.agents.get(id)?.cwd;
+  }
+
   roomName(roomId: string): string {
     return this.roomNames.get(roomId) ?? roomId.split('/').filter(Boolean).pop() ?? roomId;
   }
@@ -319,11 +341,13 @@ export class Office {
     if (existing) {
       // Sessão que voltou durante o período de graça.
       delete existing.removeAt;
+      if (p.title) existing.info.title = p.title;
       this.setStatus(p.id, p.status, p.waitingFor);
       return;
     }
-    const roomId = normalizeCwd(p.cwd);
-    this.ensureRoom(roomId, now);
+    const normalizedCwd = normalizeCwd(p.cwd);
+    const roomId = this.deps.twoOffices ? this.pickTwoOfficesRoom(p.id, p.sessionId, now) : normalizedCwd;
+    if (!this.deps.twoOffices) this.ensureRoom(roomId, now);
     const chosen = this.roomCharacter(roomId, p.id, p.sessionId);
     // A mesma sessão retomada noutro processo (ex.: "Assumir aqui") mantém o nome, mesmo com o processo antigo
     // ainda saindo do escritório.
@@ -335,6 +359,7 @@ export class Office {
       name: person.name,
       look: person.look,
       role: p.role,
+      ...(p.title ? { title: p.title } : {}),
       sessionId: p.sessionId,
       account: p.account,
       status: p.status,
@@ -352,12 +377,43 @@ export class Office {
       if (chosen.parts) info.parts = { ...chosen.parts };
     }
     if (p.status === 'waiting') info.waitingFor = p.waitingFor ?? tr('responder no terminal');
-    const rec: AgentRecord = { info, history: [] };
+    const rec: AgentRecord = { info, cwd: normalizedCwd, history: [] };
     if (p.status === 'working') rec.turnStart = now;
     this.agents.set(p.id, rec);
     const acc = this.deps.accountName(p.account);
     this.notice('arrive', p.id, 'info', tr('👋 {0} chegou em {1}{2}', [info.name, this.roomName(roomId), acc ? ` (${acc})` : '']), roomId);
     this.markDirty();
+  }
+
+  /** Updates the agent's jobdesk (session name / role & title). */
+  setJobdesk(id: string, jobdesk: string): void {
+    const rec = this.agents.get(id);
+    if (!rec) return;
+    const clean = jobdesk.trim();
+    if (!clean) return;
+    if (rec.info.role === clean && rec.info.title === clean) return;
+    rec.info.role = clean;
+    rec.info.title = clean;
+    this.markDirty();
+  }
+
+  /** Moves a main agent (and its subagents) to another room (e.g. Office 1 <-> Office 2). */
+  moveAgentRoom(id: string, targetRoomId: string): boolean {
+    const rec = this.agents.get(id);
+    if (!rec || rec.info.kind !== 'main' || rec.removeAt !== undefined) return false;
+    if (this.deps.twoOffices) this.seedFixedOffices(this.now());
+    if (!this.rooms.has(targetRoomId)) return false;
+    if (rec.info.roomId === targetRoomId) return true;
+    rec.info.roomId = targetRoomId;
+    this.deps.agentRooms?.set(rec.info.sessionId, targetRoomId);
+    this.deps.agentRooms?.set(id, targetRoomId);
+    for (const sub of this.descendants(id)) {
+      sub.info.roomId = targetRoomId;
+    }
+    const acc = this.deps.accountName(rec.info.account);
+    this.notice('arrive', id, 'info', tr('👋 {0} chegou em {1}{2}', [rec.info.name, this.roomName(targetRoomId), acc ? ` (${acc})` : '']), targetRoomId, { dedupeMs: 0 });
+    this.markDirty();
+    return true;
   }
 
   /** Mesmo processo, sessão nova (/clear, /resume): o personagem continua, tarefas e números zeram. */
@@ -687,7 +743,10 @@ export class Office {
       else info[k] = v;
       changed = true;
     };
-    if (info.kind === 'main') set('title', t.title);
+    if (info.kind === 'main') {
+      set('title', t.title);
+      if (this.deps.twoOffices && t.title) set('role', t.title);
+    }
     set('tasks', t.tasks.map((x) => ({ ...x })));
     set('stats', { ...t.stats });
     set('model', t.model);
@@ -949,7 +1008,11 @@ export class Office {
     if (this.effects.prune(now)) this.markDirty();
     if (removed) {
       const occupied = new Set([...this.agents.values()].map((r) => r.info.roomId));
-      for (const id of [...this.rooms.keys()]) if (!occupied.has(id)) this.rooms.delete(id);
+      const fixedIds = this.deps.twoOffices ? new Set<string>(FIXED_OFFICES.map((o) => o.id)) : null;
+      for (const id of [...this.rooms.keys()]) {
+        if (fixedIds?.has(id)) continue;
+        if (!occupied.has(id)) this.rooms.delete(id);
+      }
       this.recomputeRoomNames();
       this.markDirty();
     }
@@ -1057,6 +1120,37 @@ export class Office {
     return out;
   }
 
+  private seedFixedOffices(now: number): void {
+    let changed = false;
+    for (const o of FIXED_OFFICES) {
+      if (!this.rooms.has(o.id)) {
+        this.rooms.set(o.id, { path: o.path, createdAt: now });
+        changed = true;
+      }
+    }
+    if (changed) this.recomputeRoomNames();
+  }
+
+  private pickTwoOfficesRoom(id: string, sessionId: string, now: number): string {
+    this.seedFixedOffices(now);
+    const validIds = new Set<string>(FIXED_OFFICES.map((o) => o.id));
+    const saved = this.deps.agentRooms?.get(id) ?? this.deps.agentRooms?.get(sessionId);
+    if (saved && validIds.has(saved)) {
+      return saved;
+    }
+    let count1 = 0;
+    let count2 = 0;
+    for (const r of this.agents.values()) {
+      if (r.info.kind !== 'main' || r.info.status === 'offline' || r.removeAt !== undefined) continue;
+      if (r.info.roomId === 'office-1') count1++;
+      else if (r.info.roomId === 'office-2') count2++;
+    }
+    const chosen = count1 <= count2 ? 'office-1' : 'office-2';
+    this.deps.agentRooms?.set(sessionId, chosen);
+    this.deps.agentRooms?.set(id, chosen);
+    return chosen;
+  }
+
   private ensureRoom(roomId: string, now: number): void {
     if (this.rooms.has(roomId)) return;
     this.rooms.set(roomId, { path: roomId, createdAt: now });
@@ -1068,6 +1162,9 @@ export class Office {
     const paths = new Map([...this.rooms].map(([id, r]) => [id, r.path]));
     for (const r of this.demoSnap?.rooms ?? []) paths.set(r.id, r.path);
     this.roomNames = roomDisplayNames(paths);
+    for (const o of FIXED_OFFICES) {
+      if (paths.has(o.id)) this.roomNames.set(o.id, o.name);
+    }
     for (const [id, path] of paths) {
       const alias = this.deps.roomAlias?.(path);
       if (alias) this.roomNames.set(id, alias);

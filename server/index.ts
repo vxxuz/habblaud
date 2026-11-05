@@ -22,6 +22,7 @@ import { describeStateMigration, legacyEnvWarning, migrateLegacyStateDir } from 
 import { errMsg, log } from './log';
 import { NameStore } from './model/names';
 import { Office } from './model/office';
+import { AgentRooms } from './model/agent-rooms';
 import { RoomAliases } from './model/room-aliases';
 import { createPtyRoutes } from './http/pty';
 import { claudeBinFrom, isExecutableFile, loadPty, PtyManager, type ScreenFactory, type SpawnPty } from './pty/manager';
@@ -85,6 +86,8 @@ names.load();
 // Nomes de sala escolhidos pelo usuário (botão direito > Renomear).
 const roomAliases = new RoomAliases(join(config.dataDir, 'rooms.json'));
 roomAliases.load();
+const agentRooms = new AgentRooms(join(config.dataDir, 'agent-rooms.json'));
+agentRooms.load();
 
 // Office, contas e fontes de agentes se referenciam (avisos de mudança / fontes): ligação tardia.
 const late: { office?: Office; agents?: SourceSet; permissions?: PermissionRegistry; messages?: MessageRegistry; ptys?: PtyManager; ptyOff?: string } = {};
@@ -124,6 +127,8 @@ const accounts = new AccountsService({
 const office = new Office({
   names,
   roomAlias: (path) => roomAliases.get(path),
+  twoOffices: true,
+  agentRooms,
   version: config.version,
   // No modo dev o Vite serve o cliente direto do código-fonte: não há build para comparar.
   build: config.dev ? undefined : createBuildReader(config.rootDir),
@@ -309,8 +314,9 @@ const messages = config.messages
                 return { ok: true };
               }
               return new Promise((resolve) => {
+                const resolvedCwd = office.agentCwd(job.agentId) ?? job.cwd;
                 const child = spawnProcess(agyBin, ['--conversation', job.sessionId, '-p', job.text], {
-                  cwd: isAbsolute(job.cwd ?? '') ? job.cwd : config.home,
+                  cwd: isAbsolute(resolvedCwd ?? '') ? resolvedCwd : config.home,
                   detached: true,
                   stdio: 'ignore',
                 });
@@ -365,7 +371,7 @@ ptys = spawnPty
         })),
       agent: (id) => {
         const a = office.get(id);
-        return a && { id: a.id, kind: a.kind, account: a.account, sessionId: a.sessionId, cwd: office.roomPath(a.roomId) };
+        return a && { id: a.id, kind: a.kind, account: a.account, sessionId: a.sessionId, cwd: office.agentCwd(a.id) ?? office.roomPath(a.roomId) };
       },
       onChange: () => office.markDirty(),
       createScreen: ptyScreen,

@@ -295,6 +295,13 @@ export class Sidebar implements UiComponent {
       clear();
     });
     head.addEventListener('dragover', (e) => {
+      if (this.dragging && this.dragging.room !== roomId) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        clear();
+        head.classList.add('is-drop-after');
+        return;
+      }
       const from = this.draggingRoom;
       if (!from || from === roomId) return;
       e.preventDefault();
@@ -304,6 +311,17 @@ export class Sidebar implements UiComponent {
     });
     head.addEventListener('dragleave', () => head.classList.remove('is-drop-before', 'is-drop-after'));
     head.addEventListener('drop', (e) => {
+      if (this.dragging && this.dragging.room !== roomId) {
+        const agentId = this.dragging.id;
+        clear();
+        e.preventDefault();
+        void fetch('/api/agents/move-room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId, roomId }),
+        }).catch(() => {});
+        return;
+      }
       const from = this.draggingRoom;
       clear();
       if (!from || from === roomId) return;
@@ -339,7 +357,7 @@ export class Sidebar implements UiComponent {
     });
     head.addEventListener('dragover', (e) => {
       const d = this.dragging;
-      if (!d || d.room !== room() || d.id === id()) return;
+      if (!d || d.id === id()) return;
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
       clear();
@@ -349,8 +367,16 @@ export class Sidebar implements UiComponent {
     head.addEventListener('drop', (e) => {
       const d = this.dragging;
       clear();
-      if (!d || d.room !== room() || d.id === id()) return;
+      if (!d || d.id === id()) return;
       e.preventDefault();
+      if (d.room !== room()) {
+        void fetch('/api/agents/move-room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: d.id, roomId: room() }),
+        }).catch(() => {});
+        return;
+      }
       const shown = this.shown.get(d.room) ?? [];
       if (moveAgent(d.room, shown, (n) => n.agent.id, (n) => n.agent.sessionId, d.id, id(), after(e))) this.ctx.invalidate();
     });

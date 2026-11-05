@@ -71,6 +71,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
   let selection: Selection = null;
   let hover: string | null = null;
   let mouse: { x: number; y: number } | null = null;
+  let dragState: { agentId: string; sx: number; sy: number; targetRoomId: string | null } | null = null;
   let raf = 0;
   let lastTs = 0;
   let hiddenAt = 0;
@@ -222,6 +223,47 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     camera.follow = VISITOR_ID;
   };
 
+  const roomAtScreen = (sx: number, sy: number): string | null => {
+    const w = camera.screenToWorld(sx, sy);
+    const tx = Math.floor(w.x / TILE);
+    const ty = Math.floor(w.y / TILE);
+    for (const room of sim.rooms.values()) {
+      if (room.present && !room.ghost && inRect(room.layout.rect, tx, ty)) return room.id;
+    }
+    return null;
+  };
+
+  const moveAgentToRoom = (agentId: string, targetRoomId: string) => {
+    const ch = sim.chars.get(agentId);
+    if (!ch || ch.leaving || ch.roomId === targetRoomId) return;
+    if (!sim.rooms.has(targetRoomId)) return;
+    if (ch.homeSpot) sim.spots.release(ch.homeSpot, ch.id);
+    ch.homeSpot = null;
+    ch.roomId = targetRoomId;
+    ch.info.roomId = targetRoomId;
+    ch.plan = [];
+    ch.path = [];
+    ch.moving = false;
+    ch.thinkIn = 0;
+    for (const sub of sim.chars.values()) {
+      if (sub.info.parentId === agentId && !sub.leaving) {
+        if (sub.homeSpot) sim.spots.release(sub.homeSpot, sub.id);
+        sub.homeSpot = null;
+        sub.roomId = targetRoomId;
+        sub.info.roomId = targetRoomId;
+        sub.plan = [];
+        sub.path = [];
+        sub.moving = false;
+        sub.thinkIn = 0;
+      }
+    }
+    void fetch('/api/agents/move-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId, roomId: targetRoomId }),
+    }).catch(() => {});
+  };
+
   const detachInput = attachInput(canvas, camera, {
     pick,
     click: (hit, at) => (visitMode ? visitClick(hit, at) : setSelection(hit)),
@@ -244,6 +286,18 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     zoomStep,
     active: () => !suspended,
     keys: () => !visitMode,
+    canDragAgent: (id) => !visitMode && !playback && id !== 'ceo:inok' && id !== VISITOR_ID && sim.chars.get(id)?.info.kind === 'main',
+    dragAgentMove: (id, sx, sy) => {
+      const targetRoomId = roomAtScreen(sx, sy);
+      dragState = { agentId: id, sx, sy, targetRoomId };
+    },
+    dragAgentEnd: (id, sx, sy, dropped) => {
+      const targetRoomId = dropped ? roomAtScreen(sx, sy) : null;
+      dragState = null;
+      if (dropped && targetRoomId) {
+        moveAgentToRoom(id, targetRoomId);
+      }
+    },
   });
 
   // ------------------------------------------------------------------ dados
@@ -308,7 +362,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
       if (camera.follow && !followCh) camera.follow = null;
       camera.update(real, followCh ? camera.centerFor(followCh.x, followCh.y - 12, camera.zoom) : null, realDt);
       renderer.frame(now, dt, options, { agent: selection?.type === 'agent' ? selection.id : null, room: selection?.type === 'room' ? selection.id : null, hover });
-      overlay.draw(now, options, { agent: selection?.type === 'agent' ? selection.id : null, room: selection?.type === 'room' ? selection.id : null, hover });
+      overlay.draw(now, options, { agent: selection?.type === 'agent' ? selection.id : null, room: selection?.type === 'room' ? selection.id : null, hover, drag: dragState });
       renderer.pruneHeads();
       // No timelapse o mundo fica mudo: o teclado e o elevador em alta velocidade só fariam barulho.
       if (soundCbs.size && !playback) cues.update(now, (c) => soundCbs.forEach((cb) => cb(c)));

@@ -223,6 +223,11 @@ export class AntigravitySource implements AgentSource {
       s.waitingFor = s.state.waitingFor;
 
       // Ensure agent is in the office
+      const jobdesk =
+        (s.meta.title && s.meta.title !== 'Antigravity Session'
+          ? s.meta.title
+          : s.state.firstUserPrompt || s.meta.preview || s.meta.title) || 'Antigravity Session';
+
       if (!s.inOffice) {
         if (s.meta.parentId) {
           const parentAgentId = `antigravity:${s.meta.parentId}`;
@@ -252,7 +257,8 @@ export class AntigravitySource implements AgentSource {
             account: this.accountId,
             sessionId: s.convId,
             cwd: s.meta.cwd,
-            role: 'Antigravity CLI',
+            role: jobdesk,
+            title: jobdesk,
             startedAt: this.now(),
             status: s.status,
             waitingFor: s.waitingFor,
@@ -262,6 +268,8 @@ export class AntigravitySource implements AgentSource {
             this.office.addActivity(s.agentId, s.state.latestActivity, true);
           }
         }
+      } else if (!s.meta.parentId) {
+        this.office.setJobdesk(s.agentId, jobdesk);
       }
 
       // Check for pending artifacts requiring CEO approval

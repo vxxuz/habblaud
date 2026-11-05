@@ -17,6 +17,12 @@ export interface InputHandlers {
   active?(): boolean;
   /** (Opcional) O teclado mexe na câmera? (Na visita, as setas e o WASD andam com o visitante.) Padrão: sim. */
   keys?(): boolean;
+  /** Can this agent be dragged between rooms? (Main agents, not CEO/visitor). */
+  canDragAgent?(id: string): boolean;
+  /** Agent drag started or moved at screen position (sx, sy). */
+  dragAgentMove?(id: string, sx: number, sy: number): void;
+  /** Agent drag finished at screen position (sx, sy) (dropped === false if cancelled). */
+  dragAgentEnd?(id: string, sx: number, sy: number, dropped: boolean): void;
 }
 
 const DRAG_THRESHOLD = 5;
@@ -42,6 +48,8 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
   let downY = 0;
   let downButton = 0;
   let dragging = false;
+  let downAgentId: string | null = null;
+  let draggingAgent = false;
   let rightDragged = false;
   let pinch: { dist: number; zoom: number; cx: number; cy: number } | null = null;
   let wheelAcc = 0;
@@ -70,8 +78,20 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
       downY = p.y;
       downButton = e.button;
       dragging = false;
+      draggingAgent = false;
       if (e.button === 2) rightDragged = false;
+      if ((e.pointerType !== 'mouse' || e.button === 0) && h.canDragAgent) {
+        const hit = h.pick(p.x, p.y);
+        downAgentId = hit?.type === 'agent' && h.canDragAgent(hit.id) ? hit.id : null;
+      } else {
+        downAgentId = null;
+      }
     } else if (pointers.size === 2) {
+      if (draggingAgent && downAgentId) {
+        h.dragAgentEnd?.(downAgentId, p.x, p.y, false);
+      }
+      downAgentId = null;
+      draggingAgent = false;
       const [a, b] = [...pointers.values()];
       pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: camera.zoom, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
       dragging = true;
@@ -103,11 +123,19 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
       dragging = true;
       if (downButton === 2) rightDragged = true;
       canvas.style.cursor = 'grabbing';
-      h.interact();
+      if (downAgentId) {
+        draggingAgent = true;
+      } else {
+        h.interact();
+      }
     }
     if (dragging) {
       canvas.style.cursor = 'grabbing';
-      camera.panBy(p.x - prev.x, p.y - prev.y);
+      if (draggingAgent && downAgentId) {
+        h.dragAgentMove?.(downAgentId, p.x, p.y);
+      } else {
+        camera.panBy(p.x - prev.x, p.y - prev.y);
+      }
     }
   };
 
@@ -123,9 +151,16 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
     if (pointers.size > 0) return;
     canvas.style.cursor = 'grab';
     if (dragging) {
+      if (draggingAgent && downAgentId) {
+        h.dragAgentEnd?.(downAgentId, p.x, p.y, true);
+      }
+      draggingAgent = false;
+      downAgentId = null;
       dragging = false;
       return;
     }
+    downAgentId = null;
+    draggingAgent = false;
     // Clique simples (sem arrastar): botão esquerdo ou toque
     if (e.pointerType !== 'mouse' || e.button === 0) {
       const hit = h.pick(p.x, p.y);
@@ -147,6 +182,11 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinch = null;
     if (!pointers.size) {
+      if (draggingAgent && downAgentId) {
+        h.dragAgentEnd?.(downAgentId, 0, 0, false);
+      }
+      downAgentId = null;
+      draggingAgent = false;
       dragging = false;
       canvas.style.cursor = 'grab';
     }

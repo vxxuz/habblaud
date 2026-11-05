@@ -239,6 +239,30 @@ describe('arrastar com mouse (pan / grab da câmera)', () => {
     expect(ctxEvent.immediateStopped).toBe(false);
     off();
   });
+
+  it('arrastar um agente com canDragAgent=true chama dragAgentMove/dragAgentEnd sem mover a câmera', () => {
+    const cv = createEventCanvas();
+    const pans: [number, number][] = [];
+    const moves: [string, number, number][] = [];
+    const ends: [string, number, number, boolean][] = [];
+    const camera = { zoom: 1, panBy: (dx: number, dy: number) => pans.push([dx, dy]), zoomAt() {}, settle() {} } as unknown as Camera;
+    const off = attachInput(cv as unknown as HTMLCanvasElement, camera, {
+      ...handlers(),
+      pick: () => ({ type: 'agent', id: 'ag:1' }),
+      canDragAgent: (id) => id === 'ag:1',
+      dragAgentMove: (id, sx, sy) => moves.push([id, sx, sy]),
+      dragAgentEnd: (id, sx, sy, dropped) => ends.push([id, sx, sy, dropped]),
+    });
+
+    cv.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 100, clientY: 100 });
+    cv.dispatch('pointermove', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 150, clientY: 160 });
+    expect(pans).toEqual([]);
+    expect(moves).toEqual([['ag:1', 150, 160]]);
+
+    cv.dispatch('pointerup', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 220, clientY: 180 });
+    expect(ends).toEqual([['ag:1', 220, 180, true]]);
+    off();
+  });
 });
 
 describe('modalOpen', () => {
