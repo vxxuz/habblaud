@@ -9,7 +9,8 @@ import { tr } from '../../../shared/i18n';
  * Codex não tem registro de sessões nem `--resume` aqui, e os agentes do demo não existem de verdade.
  */
 export function ptyControllable(a: Pick<AgentInfo, 'id' | 'kind' | 'provider'> | null | undefined): boolean {
-  return !!a && a.kind === 'main' && providerOf(a) === 'claude' && !isDemoId(a.id);
+  const p = a ? providerOf(a) : undefined;
+  return !!a && a.kind === 'main' && (p === 'claude' || p === 'antigravity') && !isDemoId(a.id);
 }
 
 export async function postPty<T = unknown>(url: string, body: unknown): Promise<T | undefined> {
