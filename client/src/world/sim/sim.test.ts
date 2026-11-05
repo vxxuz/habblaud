@@ -92,6 +92,15 @@ function newSim(): Sim {
 }
 
 describe('simulação do escritório', () => {
+  it('inicializa o avatar permanente do CEO na sala da diretoria', () => {
+    const sim = newSim();
+    expect(sim.ceo).toBeDefined();
+    expect(sim.ceo?.info.id).toBe('ceo:inok');
+    expect(sim.ceo?.info.name).toContain('Inok');
+    expect(sim.person('ceo:inok')).toBe(sim.ceo);
+    expect([...sim.people()].some((p) => p.id === 'ceo:inok')).toBe(true);
+  });
+
   it('carga inicial: quem trabalha já está sentado digitando, sala acesa', () => {
     const sim = newSim();
     const clock = { now: T0 };

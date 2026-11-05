@@ -141,6 +141,8 @@ export class Sim {
   visitorIntent: VisitorIntent = { ...NO_INTENT };
   /** Visita: as luzes do prédio (aplicadas a cada snapshot e a cada segundo). */
   visitLight: VisitLight = 'live';
+  /** Avatar permanente do CEO na sala da diretoria. */
+  ceo: Character | null = null;
 
   /** `storage` das carteiras: null = só em memória (o timelapse não mexe nas moedinhas de verdade). */
   constructor(
@@ -155,6 +157,7 @@ export class Sim {
     this.finder = new PathFinder(this.building.grid);
     this.spots.setSpots(this.building.spots);
     for (const s of this.spots.ofKind('elevator')) this.elevators.push(new Elevator(this.elevators.length, s.id));
+    this.initCeo();
   }
 
   // =================================================================== snapshot
@@ -416,6 +419,54 @@ export class Sim {
 
   // =================================================================== nascimento e posicionamento
 
+  initCeo(): void {
+    const ceoSpot = this.spots.ofKind('ceo_chair')[0];
+    if (!ceoSpot) return;
+    const ceoInfo: AgentInfo = {
+      id: 'ceo:inok',
+      name: 'Inok (CEO)',
+      kind: 'main',
+      role: 'CEO & Founder',
+      provider: 'antigravity',
+      account: 'inok',
+      project: 'Executive Suite',
+      status: 'working',
+      statusSince: 0,
+      seed: 888888,
+      look: 'm',
+      parts: {
+        topStyle: 'shirt_tie',
+        top: '#1c2438',
+        topAccent: '#d4af37',
+        bottom: '#1c2438',
+        shoes: '#0a0a0f',
+        hairStyle: 'side_part',
+        hair: '#2c221e',
+        eyes: '#222222',
+        skin: '#e8beac',
+        accessory: 'glasses',
+        accessoryColor: '#d4af37',
+      },
+    };
+    let appearance;
+    try {
+      appearance = this.art.appearanceFromSeed(ceoInfo.seed, { look: 'm', sub: false, parts: ceoInfo.parts });
+    } catch {
+      return;
+    }
+    const ch = new Character(ceoInfo, appearance);
+    ch.placeAtTile(ceoSpot.tx, ceoSpot.ty);
+    ch.x = ceoSpot.x;
+    ch.y = ceoSpot.y;
+    ch.dir = 'down';
+    ch.atSpot = ceoSpot.id;
+    ch.homeSpot = ceoSpot.id;
+    ch.inside = true;
+    ch.alpha = 1;
+    ch.setPose('sit');
+    this.ceo = ch;
+  }
+
   private spawn(a: AgentInfo, first: boolean, now: number): Character | null {
     let appearance;
     try {
@@ -581,6 +632,10 @@ export class Sim {
     for (const ch of this.chars.values()) {
       if (ch.missingSince !== null && !ch.leaving && now - ch.missingSince >= MISSING_DEBOUNCE_MS) this.refreshMode(ch);
       this.runCharacter(ch, dt, now);
+    }
+    if (this.ceo) {
+      this.ceo.animT += dt * 1000;
+      if (this.ceo.icon && now >= this.ceo.iconUntil) this.ceo.icon = null;
     }
     if (this.visitor) this.runVisitor(this.visitor, dt, now);
     for (const [id, ch] of this.chars) {
@@ -1721,15 +1776,16 @@ export class Sim {
     return !this.visit && isLongIdle(ch.info.status, ch.info.statusSince, now);
   }
 
-  /** Os personagens desenhados: os agentes e, na visita, o visitante (por último). */
+  /** Os personagens desenhados: os agentes, o CEO e, na visita, o visitante. */
   *people(): IterableIterator<Character> {
     yield* this.chars.values();
+    if (this.ceo) yield this.ceo;
     if (this.visitor && !this.visitor.gone) yield this.visitor;
   }
 
-  /** Um personagem desenhado pelo id (agente ou o visitante). */
+  /** Um personagem desenhado pelo id (agente, CEO ou o visitante). */
   person(id: string): Character | undefined {
-    return this.chars.get(id) ?? (this.visitor?.id === id ? this.visitor : undefined);
+    return this.chars.get(id) ?? (this.ceo?.id === id ? this.ceo : this.visitor?.id === id ? this.visitor : undefined);
   }
 
   /** Visita: o visitante surge no elevador da recepção e sai para o hall (null = tira o visitante). */

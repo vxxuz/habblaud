@@ -97,6 +97,8 @@ export type SpotKind =
   | 'sink'
   | 'elevator'
   | 'talk'
+  | 'ceo_chair'
+  | 'ceo_visitor'
   | 'watch'; // ponto em pé da torcida (assistir a uma partida)
 
 /**
