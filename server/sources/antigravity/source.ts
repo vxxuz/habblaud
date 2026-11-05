@@ -125,11 +125,11 @@ export class AntigravitySource implements AgentSource {
     }
     return [
       {
-        id: this.accountId,
+        label: this.accountId,
         provider: 'antigravity',
-        dir: this.antigravityDir,
-        name: 'Antigravity CLI',
+        path: this.antigravityDir,
         sessions: openCount,
+        ok: true,
       },
     ];
   }
