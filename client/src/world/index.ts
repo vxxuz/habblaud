@@ -317,7 +317,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
         setHover(hit?.type === 'agent' ? hit.id : null);
       }
       // seleção de quem já foi embora
-      if (selection?.type === 'agent' && !sim.chars.has(selection.id)) setSelection(null);
+      if (selection?.type === 'agent' && !sim.person(selection.id)) setSelection(null);
       if (selection?.type === 'room' && !sim.rooms.has(selection.id)) setSelection(null);
     } catch (err) {
       console.error('[mundo] erro no frame', err);

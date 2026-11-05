@@ -271,8 +271,7 @@ export function layoutCeoSuite(): AreaLayout {
   b.furn('plant_tall', 14, 2, 'bonsai', { order: 0.23 });
 
   b.furn('desk', 7, 5, 'dark', { order: 0.4 });
-  b.seat('office_chair', 'office_chair', 7, 4, 'down', 'black', { order: 0.35 });
-  b.spot('ceo_chair', 7, 4, 'down', { group: 'ceo' });
+  b.seat('ceo_chair', 'office_chair', 7, 4, 'down', 'black', { order: 0.35, group: 'ceo' });
 
   b.spot('ceo_visitor', 7, 7, 'up', { group: 'ceo', dy: -2 });
 

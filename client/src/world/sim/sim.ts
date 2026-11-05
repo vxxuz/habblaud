@@ -461,12 +461,14 @@ export class Sim {
     ch.placeAtTile(ceoSpot.tx, ceoSpot.ty);
     ch.x = ceoSpot.x;
     ch.y = ceoSpot.y;
-    ch.dir = 'down';
+    ch.dir = ceoSpot.dir;
     ch.atSpot = ceoSpot.id;
     ch.homeSpot = ceoSpot.id;
-    ch.inside = true;
+    ch.inside = false;
     ch.alpha = 1;
-    ch.setPose('sit');
+    ch.seated = !!ceoSpot.seated;
+    if (ceoSpot.seated) ch.sortY = ceoSpot.sortY ?? null;
+    ch.setPose(ceoSpot.seated ? 'sit' : 'stand');
     this.ceo = ch;
   }
 
@@ -621,6 +623,22 @@ export class Sim {
           ch.ty = n.y;
         }
       }
+    }
+    if (this.ceo) {
+      const ceoSpot = this.spots.ofKind('ceo_chair')[0];
+      if (ceoSpot) {
+        this.ceo.placeAtTile(ceoSpot.tx, ceoSpot.ty);
+        this.ceo.x = ceoSpot.x;
+        this.ceo.y = ceoSpot.y;
+        this.ceo.dir = ceoSpot.dir;
+        this.ceo.atSpot = ceoSpot.id;
+        this.ceo.homeSpot = ceoSpot.id;
+        this.ceo.inside = false;
+        this.ceo.seated = !!ceoSpot.seated;
+        if (ceoSpot.seated) this.ceo.sortY = ceoSpot.sortY ?? null;
+      }
+    } else {
+      this.initCeo();
     }
   }
 

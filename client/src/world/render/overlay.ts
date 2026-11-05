@@ -321,8 +321,9 @@ export class Overlay {
       const selected = sel.agent === ch.id;
       const hovered = sel.hover === ch.id;
       // o visitante (cena Visita) sempre com o nome e o crachá
+      const isCeo = ch === this.sim.ceo;
       const visitor = ch === this.sim.visitor;
-      const labeled = selected || hovered || ch.mode === 'wait' || showAll || visitor;
+      const labeled = selected || hovered || ch.mode === 'wait' || showAll || visitor || isCeo;
       const above = labeled && this.labelAbove(ch);
       const b = this.bubbleFor(ch, head, now, opts, selected, hovered);
       if (b) {
@@ -330,7 +331,7 @@ export class Overlay {
         items.push(b);
       }
       if (labeled) {
-        const prio = selected ? 100 : hovered ? 95 : visitor ? 92 : ch.mode === 'wait' ? 90 : ch.info.kind === 'main' ? 50 : 40;
+        const prio = selected ? 100 : hovered ? 95 : isCeo ? 93 : visitor ? 92 : ch.mode === 'wait' ? 90 : ch.info.kind === 'main' ? 50 : 40;
         let l = this.labelPool[this.nl];
         if (!l) this.labelPool[this.nl] = l = { type: 'label', ch, head, prio, above, compact: false, x: 0, y: 0, w: 0, h: 0 };
         else {
