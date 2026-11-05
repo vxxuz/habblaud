@@ -40,6 +40,8 @@ import { CodexHistory } from './sources/codex/history';
 import { CodexSource } from './sources/codex/source';
 import { AntigravitySource } from './sources/antigravity/source';
 import { getAntigravityHome } from './sources/antigravity/detector';
+import { AntigravityHistory } from './sources/antigravity/history';
+import { runnableAgyBin } from './pty/antigravity-bin';
 import { createBuildReader, readBuildInfo } from './build';
 import { UpdateChecker } from './updates/checker';
 import { getLocale, tr } from '../shared/i18n';
@@ -205,6 +207,14 @@ const history = config.terminal
   ? new HistorySet([new SessionHistory({ accounts: () => accounts.entries(), openAgentOf: (acc, sid) => openMainAgent(office.list(), acc, sid) })])
   : undefined;
 if (history && codex) history.add(new CodexHistory({ accounts: () => accounts.entriesOf('codex'), openAgentOf: (acc, sid) => openMainAgent(office.list(), acc, sid) }));
+if (history && antigravity) {
+  history.add(
+    new AntigravityHistory({
+      antigravityDir,
+      openAgentOf: (acc, sid) => openMainAgent(office.list(), acc, sid),
+    }),
+  );
+}
 // Entregas: o fim de cada pedido, lido dos transcripts do histórico (mesma trava do terminal). Os arquivos entregues
 // são lidos aqui (Node, ou pasta de conta montada no Docker) ou pelo auxiliar do host.
 const deliveries = history
@@ -257,10 +267,11 @@ late.permissions = permissions;
 // fora do Docker o próprio servidor roda o comando (HABBLAUD_CODEX_BIN ou `codex` do PATH); no Docker, o auxiliar do
 // host (npm run codex:bridge).
 const codexBin = config.messages && !config.inDocker ? findCodexBin(process.env) : undefined;
-// Terminal interativo e Novo agente: os dois rodam o Claude Code neste computador, então pedem a mesma liberação,
-// HABBLAUD_PTY=1 (aceita os mesmos valores do HABBLAUD_TERMINAL).
+// Terminal interativo e Novo agente: os dois rodam o Claude Code ou Antigravity neste computador, então pedem a mesma liberação,
+// HABBLAUD_PTY=1 (aceita os mesmos valores do HABBLAUD_TERMINAL; auto-liga se agy estiver disponível).
 const ptyFlag = process.env.HABBLAUD_PTY?.trim();
-const ptyOptIn = isTruthy(ptyFlag);
+const agyBin = runnableAgyBin(process.env);
+const ptyOptIn = ptyFlag !== undefined ? isTruthy(ptyFlag) : (!!agyBin || isTruthy(ptyFlag));
 // Novo agente pelo escritório (sessão do Claude Code em segundo plano, ou a tela do app do Claude preenchida): a
 // liberação acima mais a trava das mensagens. No Docker, quem roda é o auxiliar do host (npm run codex:bridge).
 const spawnOn = config.messages && ptyOptIn;
@@ -287,19 +298,23 @@ const messages = config.messages
   : undefined;
 late.messages = messages;
 
-// Terminal interativo (abrir/assumir sessões e encerrar agentes): opt-in com HABBLAUD_PTY=1, só com bind local, fora
-// do Docker, com node-pty e o executável do claude no PATH.
+// Terminal interativo (abrir/assumir sessões e encerrar agentes): opt-in com HABBLAUD_PTY=1 (ou agy detectado), só com bind local, fora
+// do Docker, com node-pty e o executável do claude ou agy no PATH.
 const claudeBinSetting = process.env.HABBLAUD_CLAUDE_BIN?.trim();
 const claudeBin = claudeBinFrom();
+const hasClaude = !!claudeBin && isExecutableFile(claudeBin);
+const hasAgy = !!agyBin;
 let spawnPty: SpawnPty | null = null;
 let ptyScreen: ScreenFactory | undefined;
 let ptyOff: string | undefined;
 if (!ptyOptIn) ptyOff = ptyFlag ? tr('desligado por HABBLAUD_PTY={0}', [ptyFlag]) : tr('desligado (ligue com HABBLAUD_PTY=1)');
 else if (config.inDocker) ptyOff = tr('indisponível no Docker (rode com npm start)');
 else if (!config.terminal) ptyOff = tr('mesma trava do terminal ({0})', [terminalOffReason(process.env, config.host, config.inDocker)]);
-else if (!claudeBin) ptyOff = claudeBinSetting ? tr('HABBLAUD_CLAUDE_BIN não encontrado no PATH ({0})', [claudeBinSetting]) : tr('executável "claude" não encontrado no PATH (defina HABBLAUD_CLAUDE_BIN)');
-else if (!isExecutableFile(claudeBin)) ptyOff = tr('o executável do Claude Code não roda: {0} (confira o HABBLAUD_CLAUDE_BIN)', [claudeBin]);
-else {
+else if (!hasClaude && !hasAgy) {
+  ptyOff = claudeBinSetting
+    ? tr('HABBLAUD_CLAUDE_BIN não encontrado no PATH ({0})', [claudeBinSetting])
+    : tr('nenhum executável ("claude" ou "agy") encontrado no PATH');
+} else {
   const loaded = await loadPty();
   spawnPty = loaded.spawn;
   ptyOff = loaded.reason;
@@ -312,7 +327,8 @@ else {
 const ptys = spawnPty
   ? new PtyManager({
       spawn: spawnPty,
-      claudeBin: claudeBin ?? 'claude',
+      claudeBin: hasClaude ? claudeBin! : 'claude',
+      agyBin,
       accounts: () => accounts.entries().map((a) => ({ id: a.id, dir: a.dir, isDefault: isDefaultDir(a.dir, config.home) })),
       agent: (id) => {
         const a = office.get(id);
@@ -507,7 +523,8 @@ server.listen(config.port, config.host, () => {
   if (office.isDemo()) log.info(tr('   Modo demonstração ligado (agentes simulados misturados aos reais).'));
   if (config.terminal) log.info(tr('   Terminal: ligado (acesso só local).'));
   else log.info(tr('   Terminal: desligado ({0}).', [terminalOffReason(process.env, config.host, config.inDocker)]));
-  log.info(ptys ? tr('   Terminal interativo: ligado ({0}).', [claudeBin]) : tr('   Terminal interativo: {0}.', [ptyOff ?? tr('desligado')]));
+  const ptyTools = [hasClaude ? `claude: ${claudeBin}` : null, hasAgy ? `agy: ${agyBin}` : null].filter(Boolean).join(', ');
+  log.info(ptys ? tr('   Terminal interativo: ligado ({0}).', [ptyTools]) : tr('   Terminal interativo: {0}.', [ptyOff ?? tr('desligado')]));
   log.info(
     !spawn
       ? tr('   Novo agente: desligado ({0}).', [!ptyOptIn ? tr('ligue com HABBLAUD_PTY=1') : tr('mesma trava das mensagens')])

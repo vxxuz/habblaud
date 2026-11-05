@@ -405,10 +405,11 @@ describe('BuildingUplink: conexão e remessas', () => {
     const h = await start({ tokensVisible: false });
     await waitFor(() => h.world.ws.uplinks.length === 1, 'primeira');
     expect(h.world.ws.uplinks[0].uplink.tokens).toBeUndefined();
-    h.store.setTheme('christmas');
+    const nextTheme = h.world.ws.uplinks[0].uplink.theme === 'christmas' ? 'halloween' : 'christmas';
+    h.store.setTheme(nextTheme);
     h.uplink.themeChanged();
     await waitFor(() => h.world.ws.uplinks.length === 2, 'tema');
-    expect(h.world.ws.uplinks[1].uplink.theme).toBe('christmas');
+    expect(h.world.ws.uplinks[1].uplink.theme).toBe(nextTheme);
   });
 
   it('welcome.building: andares e agentes do mundo até a primeira remessa daqui', async () => {
