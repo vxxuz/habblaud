@@ -9,6 +9,16 @@ export interface ArtifactMetadata {
   userFacing?: boolean;
 }
 
+export function isPlanArtifact(name: string): boolean {
+  return /plan|design|proposal|spec|review|rencana|usulan/i.test(name);
+}
+
+export function requiresCeoApproval(meta: ArtifactMetadata, artifactName: string): boolean {
+  if (meta.requestFeedback === true) return true;
+  if (meta.userFacing === false) return false;
+  return isPlanArtifact(artifactName);
+}
+
 export interface ArtifactScannerOptions {
   approvalsPath?: string;
 }
@@ -91,8 +101,8 @@ export class ArtifactScanner {
         try {
           const raw = readFileSync(metaPath, 'utf8');
           const meta: ArtifactMetadata = JSON.parse(raw);
-          // Only artifacts with requestFeedback: true require CEO approval!
-          if (!meta.requestFeedback) continue;
+          // Artifacts requiring CEO approval: explicit requestFeedback: true, or plan/design documents
+          if (!requiresCeoApproval(meta, artifactName)) continue;
 
           const artifactPath = join(sessionBrainDir, artifactName);
           const updatedAt = meta.updatedAt ? Date.parse(meta.updatedAt) : Date.now();
