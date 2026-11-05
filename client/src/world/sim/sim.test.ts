@@ -101,6 +101,35 @@ describe('simulação do escritório', () => {
     expect([...sim.people()].some((p) => p.id === 'ceo:inok')).toBe(true);
   });
 
+  it('agente com artifact pending vai até a sala do CEO e depois retorna à mesa', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    const a1 = agent('ana', '/a', 'working');
+    sim.applySnapshot(snap([room('/a', 0)], [a1]), clock.now);
+    run(sim, clock, 0.5);
+    const ana = sim.chars.get('ana')!;
+    expect(ana.atSpot).toBe(ana.homeSpot);
+
+    // Artifact requiring approval arrives
+    const a1Pending = agent('ana', '/a', 'waiting', {
+      waitingFor: 'aprovar artifact com o CEO',
+      pendingArtifact: { id: 'plan.md', name: 'plan.md', path: '/tmp/plan.md' },
+    });
+    sim.applySnapshot(snap([room('/a', 0)], [a1Pending]), clock.now);
+    run(sim, clock, 30, () => ana.atSpot?.includes('ceo_visitor') ?? false);
+
+    expect(ana.atSpot).toContain('ceo_visitor');
+    expect(ana.dir).toBe('up');
+    expect(ana.held).toBe('papers');
+
+    // Artifact approved (cleared)
+    const a1Done = agent('ana', '/a', 'working');
+    sim.applySnapshot(snap([room('/a', 0)], [a1Done]), clock.now);
+    run(sim, clock, 30, () => ana.atSpot === ana.homeSpot);
+
+    expect(ana.atSpot).toBe(ana.homeSpot);
+  });
+
   it('carga inicial: quem trabalha já está sentado digitando, sala acesa', () => {
     const sim = newSim();
     const clock = { now: T0 };

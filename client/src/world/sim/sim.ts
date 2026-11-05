@@ -317,6 +317,9 @@ export class Sim {
     }
     // shells mudam sem mudar o status (ex.: comando em primeiro plano começou/terminou)
     if (prevStatus !== a.status || hadShells || !!a.shells?.length || ch.mode === 'shell' || this.forcedOffline.has(ch.id)) this.refreshMode(ch);
+    const prevArtifact = ch.info.pendingArtifact?.id;
+    const nextArtifact = a.pendingArtifact?.id;
+    if (prevArtifact !== nextArtifact) this.interrupt(ch);
     this.refreshShell(ch, now);
   }
 
@@ -1232,6 +1235,7 @@ export class Sim {
     if (ch.gone) return false;
     if (ch.mode === 'leave') return this.planLeave(ch, now);
     if (ch.mode === 'deliver') return this.planDeliver(ch, now);
+    if (ch.info.pendingArtifact) return this.planCeoReview(ch, now);
     const room = this.rooms.get(ch.roomId);
     if (!room || !room.present) return this.planLobby(ch, room);
     this.assignHome(ch);
@@ -1278,6 +1282,34 @@ export class Sim {
   /** Levantar/sair do lugar atual antes de andar. */
   private pushLeave(ch: Character, steps: Step[]): void {
     if (ch.atSpot) steps.push({ t: 'exit' });
+  }
+
+  private planCeoReview(ch: Character, now: number): boolean {
+    const visitorSpot = this.spots.ofKind('ceo_visitor')[0];
+    if (!visitorSpot) return false;
+    if (ch.atSpot === visitorSpot.id) {
+      ch.dir = visitorSpot.dir;
+      ch.setPose('read', 'papers');
+      return false;
+    }
+    const steps: Step[] = [];
+    this.pushLeave(ch, steps);
+    steps.push(
+      { t: 'go', tx: visitorSpot.tx, ty: visitorSpot.ty, held: 'papers', dir: visitorSpot.dir, run: true },
+      { t: 'enter', spot: visitorSpot.id },
+      {
+        t: 'do',
+        fn: () => {
+          ch.setPose('read', 'papers');
+          if (ch.info.pendingArtifact?.name) {
+            ch.showBubble('📄', ch.info.pendingArtifact.name, 30_000, this.now);
+          }
+        },
+      },
+    );
+    void now;
+    ch.queue.push(...steps);
+    return true;
   }
 
   private planGoHome(ch: Character, now: number, held: 'none' | 'coffee' | 'water' = 'none'): boolean {
@@ -1714,6 +1746,11 @@ export class Sim {
       if (ch.mode === 'work') ch.setPose('read', 'laptop');
       else if (ch.mode === 'wait') ch.setPose('raise_hand');
       else ch.setPose('stand');
+      return;
+    }
+    if (spot.kind === 'ceo_visitor') {
+      ch.dir = spot.dir;
+      ch.setPose('read', 'papers');
       return;
     }
     if (!spot.seated) {
