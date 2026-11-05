@@ -225,6 +225,9 @@ export function worldSocketUrl(base: string): string {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv): ServerConfig {
+  if (!env.HABBLAUD_LANG) {
+    env.HABBLAUD_LANG = 'en';
+  }
   const home = env.HOME || homedir();
   const inDocker = detectDocker(env);
   const port = Number.parseInt(env.HABBLAUD_PORT ?? '', 10);

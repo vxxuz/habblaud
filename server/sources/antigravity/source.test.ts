@@ -193,7 +193,7 @@ describe('AntigravitySource Integration', () => {
     (source as unknown as { syncSessions: () => void }).syncSessions();
 
     expect(agent.status).toBe('waiting');
-    expect(agent.waitingFor).toBe('Pergunta');
+    expect(agent.waitingFor).toBe('Question');
 
     // Remove lock file (session closed)
     rmSync(lockPath);

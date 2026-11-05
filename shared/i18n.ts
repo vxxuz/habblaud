@@ -75,7 +75,7 @@ function detect(): Locale {
       const n = normalizeLocale(l);
       if (n) return n;
     }
-    return 'pt-BR';
+    return 'en';
   }
   const env = g.process?.env ?? {};
   // Os testes comparam textos em PT: ficam em PT mesmo numa máquina em outro idioma.

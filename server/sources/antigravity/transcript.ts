@@ -40,37 +40,37 @@ export function describeToolCall(call: ToolCallItem): string {
   switch (name) {
     case 'read_file': {
       const f = cleanPath(args.Path);
-      return f ? `Lendo ${f}` : 'Lendo arquivo';
+      return f ? `Reading ${f}` : 'Reading file';
     }
     case 'write_file': {
       const f = cleanPath(args.Path);
-      return f ? `Criando ${f}` : 'Criando arquivo';
+      return f ? `Creating ${f}` : 'Creating file';
     }
     case 'edit_file': {
       const f = cleanPath(args.Path);
-      return f ? `Editando ${f}` : 'Editando arquivo';
+      return f ? `Editing ${f}` : 'Editing file';
     }
     case 'run_command': {
       const cmd = typeof args.CommandLine === 'string' ? args.CommandLine.trim() : '';
-      return cmd ? `Executando: ${cmd.slice(0, 32)}` : 'Executando comando';
+      return cmd ? `Running: ${cmd.slice(0, 32)}` : 'Running command';
     }
     case 'search_web': {
       const q = typeof args.query === 'string' ? args.query.trim() : '';
-      return q ? `Pesquisando na web: ${q.slice(0, 24)}` : 'Pesquisando na web';
+      return q ? `Searching web: ${q.slice(0, 24)}` : 'Searching web';
     }
     case 'ask_question': {
-      return 'Aguardando resposta';
+      return 'Waiting for answer';
     }
     case 'invoke_subagent': {
       const role = typeof args.Role === 'string' ? args.Role.trim() : '';
-      return role ? `Iniciando subagente (${role})` : 'Iniciando subagente';
+      return role ? `Starting subagent (${role})` : 'Starting subagent';
     }
     case 'call_mcp_tool': {
       const t = typeof args.ToolName === 'string' ? args.ToolName.trim() : 'mcp';
-      return `Chamando MCP (${t})`;
+      return `Calling MCP (${t})`;
     }
     default:
-      return `Usando ${name}`;
+      return `Using ${name}`;
   }
 }
 
@@ -169,7 +169,7 @@ export function parseTranscriptLine(line: string, state: AntigravitySessionState
       id: `prompt-${state.stepCount}`,
       kind: 'prompt',
       icon: '💬',
-      text: 'Recebeu instrução do usuário',
+      text: 'Received user prompt',
       at,
     };
     state.latestActivity = act;
@@ -182,7 +182,7 @@ export function parseTranscriptLine(line: string, state: AntigravitySessionState
       const first = tools[0]!;
       if (first.name === 'ask_question') {
         state.status = 'waiting';
-        state.waitingFor = 'Pergunta';
+        state.waitingFor = 'Question';
       } else {
         state.status = 'working';
         state.waitingFor = undefined;
@@ -199,7 +199,7 @@ export function parseTranscriptLine(line: string, state: AntigravitySessionState
         id: `think-${state.stepCount}`,
         kind: 'think',
         icon: '🧠',
-        text: 'Pensando e planejando',
+        text: 'Thinking and planning',
         at,
       };
       state.latestActivity = act;
@@ -213,7 +213,7 @@ export function parseTranscriptLine(line: string, state: AntigravitySessionState
       id: `respond-${state.stepCount}`,
       kind: 'done',
       icon: '✓',
-      text: 'Concluiu a resposta',
+      text: 'Finished response',
       at,
     };
     state.latestActivity = act;

@@ -7,13 +7,13 @@ import {
 
 describe('Antigravity Transcript Parser', () => {
   it('describes tool calls accurately', () => {
-    expect(describeToolCall({ name: 'read_file', args: { Path: '/home/inok/test.ts' } })).toBe('Lendo test.ts');
-    expect(describeToolCall({ name: 'edit_file', args: { Path: '/home/inok/src/main.ts' } })).toBe('Editando main.ts');
-    expect(describeToolCall({ name: 'write_file', args: { Path: '/home/inok/new.txt' } })).toBe('Criando new.txt');
-    expect(describeToolCall({ name: 'run_command', args: { CommandLine: 'npm test' } })).toBe('Executando: npm test');
-    expect(describeToolCall({ name: 'search_web', args: { query: 'antigravity docs' } })).toBe('Pesquisando na web: antigravity docs');
-    expect(describeToolCall({ name: 'ask_question' })).toBe('Aguardando resposta');
-    expect(describeToolCall({ name: 'invoke_subagent', args: { Role: 'Code Researcher' } })).toBe('Iniciando subagente (Code Researcher)');
+    expect(describeToolCall({ name: 'read_file', args: { Path: '/home/inok/test.ts' } })).toBe('Reading test.ts');
+    expect(describeToolCall({ name: 'edit_file', args: { Path: '/home/inok/src/main.ts' } })).toBe('Editing main.ts');
+    expect(describeToolCall({ name: 'write_file', args: { Path: '/home/inok/new.txt' } })).toBe('Creating new.txt');
+    expect(describeToolCall({ name: 'run_command', args: { CommandLine: 'npm test' } })).toBe('Running: npm test');
+    expect(describeToolCall({ name: 'search_web', args: { query: 'antigravity docs' } })).toBe('Searching web: antigravity docs');
+    expect(describeToolCall({ name: 'ask_question' })).toBe('Waiting for answer');
+    expect(describeToolCall({ name: 'invoke_subagent', args: { Role: 'Code Researcher' } })).toBe('Starting subagent (Code Researcher)');
   });
 
   it('updates state on USER_INPUT line', () => {
@@ -32,7 +32,7 @@ describe('Antigravity Transcript Parser', () => {
 
     expect(state.status).toBe('working');
     expect(state.stepCount).toBe(1);
-    expect(state.latestActivity?.text).toBe('Recebeu instrução do usuário');
+    expect(state.latestActivity?.text).toBe('Received user prompt');
   });
 
   it('updates state, tokens, and waiting status on ask_question tool', () => {
@@ -57,7 +57,7 @@ describe('Antigravity Transcript Parser', () => {
     );
 
     expect(state.status).toBe('waiting');
-    expect(state.waitingFor).toBe('Pergunta');
+    expect(state.waitingFor).toBe('Question');
     expect(state.inputTokens).toBe(500);
     expect(state.outputTokens).toBe(150);
   });
