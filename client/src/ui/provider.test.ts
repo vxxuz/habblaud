@@ -7,7 +7,9 @@ import {
   emptyOfficeHint,
   fallbackShort,
   hasCodexPermission,
+  isAntigravity,
   isCodex,
+  looksLikeAntigravityId,
   looksLikeCodexId,
   providerOf,
   showsProviderTag,
@@ -21,6 +23,22 @@ describe('ferramenta (Claude Code ou Codex)', () => {
     expect(isCodex({ provider: 'codex' })).toBe(true);
     expect(isCodex({ provider: 'claude' })).toBe(false);
     expect(isCodex(null)).toBe(false);
+    expect(isAntigravity({ provider: 'antigravity' })).toBe(true);
+    expect(isAntigravity({ provider: 'codex' })).toBe(false);
+    expect(isAntigravity(null)).toBe(false);
+  });
+
+  it('suporte a Antigravity (provider, id, short, tag e chip)', () => {
+    expect(providerOf({ provider: 'antigravity' })).toBe('antigravity');
+    expect(looksLikeAntigravityId('.antigravity')).toBe(true);
+    expect(looksLikeAntigravityId('antigravity')).toBe(true);
+    expect(looksLikeAntigravityId('demo:.antigravity')).toBe(true);
+    expect(accountProvider(undefined, '.antigravity')).toBe('antigravity');
+    expect(fallbackShort('.antigravity')).toBe('AG');
+    expect(showsProviderTag('antigravity', 'Conta Principal')).toBe(true);
+    expect(showsProviderTag('antigravity', 'Antigravity CLI')).toBe(false);
+    expect(accountChipLabel({ name: 'Antigravity', provider: 'antigravity' }, 'ag', 'antigravity')).toBe('Antigravity');
+    expect(accountChipLabel(undefined, 'ag', 'antigravity')).toBe('ag · Antigravity');
   });
 
   it('id com cara de pasta do Codex (só quando a conta já não está no snapshot)', () => {
