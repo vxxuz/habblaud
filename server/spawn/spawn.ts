@@ -11,10 +11,11 @@
 // Anexos (spawn/attachments.ts): quem roda grava os arquivos em ~/.habblaud/attachments/ e põe os caminhos no fim
 // do pedido. Sem shell (execFile), com prazo, e o pedido vai depois de `--` (nunca vira opção nem subcomando).
 // Node puro e sem dependências: também é importado pelo auxiliar do host (via tsx).
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
+import { errMsg } from '../log';
 import { tr } from '../../shared/i18n';
 import { attachmentsRoot, promptWithAttachments, writeAttachments, type Attachment, type AttachmentStore } from './attachments';
 
@@ -112,6 +113,25 @@ export function createCliRunner(bin: string, timeoutMs = CLI_TIMEOUT_MS): CliRun
         ok({ ok: false, error: (line ?? tr('o claude não começou a sessão')).slice(0, ERROR_MAX) });
       });
       child.stdin?.end();
+    });
+}
+
+/** Inicia uma sessão do Antigravity CLI na pasta do pedido. */
+export function createAgyCliRunner(bin: string): CliRunner {
+  return (req) =>
+    new Promise((ok) => {
+      try {
+        const args = req.prompt.trim() ? ['-p', req.prompt] : [];
+        const child = spawn(bin, args, {
+          cwd: req.folder,
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.unref();
+        ok({ ok: true, id: `agy-${child.pid}` });
+      } catch (err) {
+        ok({ ok: false, error: errMsg(err) });
+      }
     });
 }
 

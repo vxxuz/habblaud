@@ -3,8 +3,9 @@
 //   npm run dev    -> tsx server/index.ts --dev (Vite em middleware mode, HMR no mesmo servidor)
 //   npm start      -> node dist/server/index.js (serve dist/client)
 import http from 'node:http';
+import { spawn as spawnProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { codexDirsRefused, isDefaultDir } from './accounts/detect';
 import { AccountsService } from './accounts/service';
 import { isTruthy, loadConfig, messagesOffReason, terminalOffReason, worldSocketUrl } from './config';
@@ -46,7 +47,7 @@ import { createBuildReader, readBuildInfo } from './build';
 import { UpdateChecker } from './updates/checker';
 import { getLocale, tr } from '../shared/i18n';
 import type { WorldLocale } from '../shared/world/protocol';
-import { createCliRunner, createOpener, SpawnService } from './spawn/spawn';
+import { createAgyCliRunner, createCliRunner, createOpener, SpawnService } from './spawn/spawn';
 import { runnableClaudeBin } from './claude-bin';
 import { AttachmentStore } from './spawn/attachments';
 import { recentFolders } from './spawn/folders';
@@ -277,14 +278,16 @@ const ptyOptIn = ptyFlag !== undefined ? isTruthy(ptyFlag) : (!!agyBin || isTrut
 const spawnOn = config.messages && ptyOptIn;
 const attachments = spawnOn ? new AttachmentStore() : undefined;
 const spawnBin = config.inDocker ? undefined : runnableClaudeBin(process.env);
+const cliRunner = spawnBin ? createCliRunner(spawnBin) : agyBin ? createAgyCliRunner(agyBin) : undefined;
 const spawn = spawnOn
-  ? new SpawnService(config.inDocker ? { attachments } : { opener: createOpener(), cli: spawnBin ? createCliRunner(spawnBin) : undefined, attachments })
+  ? new SpawnService(config.inDocker ? { attachments } : { opener: createOpener(), cli: cliRunner, attachments })
   : undefined;
 // Ditado: no Docker quem transcreve é o auxiliar do host; no Node, o servidor, se achar o Whisper local.
 const whisper = config.messages && !config.inDocker ? findWhisper() : undefined;
 const dictation = config.messages
   ? new DictationService(whisper && !('missing' in whisper) ? { transcriber: createWhisperTranscriber(whisper) } : {})
   : undefined;
+let ptys: PtyManager | undefined;
 const messages = config.messages
   ? new MessageRegistry({
       office,
@@ -294,6 +297,26 @@ const messages = config.messages
         run: codexBin ? createCodexQueueRunner(codexBin) : undefined,
         homeOf: (account) => accounts.entriesOf('codex').find((e) => e.id === account)?.detected.configDir,
       },
+      antigravity: agyBin
+        ? {
+            run: async (job) => {
+              const activePty = ptys?.list().find((p) => (p.agentId === job.agentId || p.fromAgent === job.agentId || p.resumed === job.sessionId) && p.exitedAt === undefined);
+              if (activePty) {
+                ptys?.input(activePty.id, job.text + '\n');
+                return { ok: true };
+              }
+              return new Promise((resolve) => {
+                const child = spawnProcess(agyBin, ['--conversation', job.sessionId, '-p', job.text], {
+                  cwd: isAbsolute(job.cwd ?? '') ? job.cwd : config.home,
+                  detached: true,
+                  stdio: 'ignore',
+                });
+                child.unref();
+                resolve({ ok: true });
+              });
+            },
+          }
+        : undefined,
     })
   : undefined;
 late.messages = messages;
@@ -324,12 +347,18 @@ else if (!hasClaude && !hasAgy) {
     if (screen.reason) log.warn(tr('Terminal interativo sem a tela completa ({0}): ao reconectar, modos como a colagem entre colchetes podem se perder.', [screen.reason]));
   }
 }
-const ptys = spawnPty
+ptys = spawnPty
   ? new PtyManager({
       spawn: spawnPty,
-      claudeBin: hasClaude ? claudeBin! : 'claude',
+      claudeBin: hasClaude ? claudeBin! : undefined,
       agyBin,
-      accounts: () => accounts.entries().map((a) => ({ id: a.id, dir: a.dir, isDefault: isDefaultDir(a.dir, config.home) })),
+      accounts: () =>
+        accounts.allEntries().map((a) => ({
+          id: a.id,
+          dir: a.dir,
+          isDefault: a.provider === 'antigravity' ? !hasClaude : isDefaultDir(a.dir, config.home),
+          provider: a.provider,
+        })),
       agent: (id) => {
         const a = office.get(id);
         return a && { id: a.id, kind: a.kind, account: a.account, sessionId: a.sessionId, cwd: office.roomPath(a.roomId) };
@@ -532,13 +561,17 @@ server.listen(config.port, config.host, () => {
         ? tr('   Novo agente: ligado, pelo auxiliar do host (deixe npm run codex:bridge rodando no computador).')
         : spawnBin
           ? tr('   Novo agente: ligado ({0} --bg; pasta ainda não confiável abre no app do Claude).', [spawnBin])
-          : tr('   Novo agente: ligado, só pelo app do Claude (claude não encontrado no PATH).'),
+          : agyBin
+            ? tr('   Novo agente: ligado (Antigravity agy: {0}).', [agyBin])
+            : tr('   Novo agente: ligado, só pelo app do Claude (claude não encontrado no PATH).'),
   );
   log.info(timeline ? tr('   Linha do tempo (timelapse): gravando em {0}.', [timelineDir]) : tr('   Linha do tempo (timelapse): gravação desligada (HABBLAUD_TIMELINE).'));
   log.info(tr('   Responder pelo escritório: {0}.', [config.terminal ? tr('ligado (precisa do mod: npm run mod:install; ou do hook antigo: npm run hooks:install)') : tr('desligado (mesma trava do terminal)')]));
   log.info(
     config.messages
-      ? tr('   Mensagens pelo escritório: ligadas (precisa do plugin habblaud-mensagens: npm run mod:install).')
+      ? agyBin
+        ? tr('   Mensagens pelo escritório: ligadas (Antigravity nativo via agy).')
+        : tr('   Mensagens pelo escritório: ligadas (precisa do plugin habblaud-mensagens: npm run mod:install).')
       : tr('   Mensagens pelo escritório: desligadas ({0}).', [messagesOffReason(process.env, config.host, config.inDocker)]),
   );
   if (config.messages) {

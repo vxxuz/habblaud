@@ -41,6 +41,7 @@ export interface PtyAccount {
   /** Pasta de configuração da conta (vira CLAUDE_CONFIG_DIR, exceto a padrão). */
   dir: string;
   isDefault: boolean;
+  provider?: string;
 }
 
 /** O que o gerenciador precisa saber de um agente principal para encerrá-lo ou assumi-lo. */
@@ -378,11 +379,6 @@ export class PtyManager {
   /** Valida o pedido de uma sessão nova (`reserved`: vagas já prometidas a tomadas em andamento). */
   private plan(p: { cwd: unknown; account?: unknown; cols?: unknown; rows?: unknown }, reserved = 0): SpawnPlan {
     if (!this.opts.spawn) throw new PtyError(503, tr('terminal desligado: {0}', [this.opts.disabledReason ?? tr('indisponível')]));
-    // Antes de tudo (o "assumir" encerra a sessão de lá depois daqui): um executável que não roda abriria um terminal que
-    // sai na hora.
-    const isAgy = (typeof p.account === 'string' && p.account.startsWith('antigravity:')) || (!this.opts.claudeBin && !!this.opts.agyBin);
-    const binToRun = isAgy && this.opts.agyBin ? this.opts.agyBin : this.opts.claudeBin;
-    if (!binToRun || !isExecutableFile(binToRun)) throw new PtyError(503, tr('o executável não roda: {0}', [binToRun ?? 'CLI']));
     if (typeof p.cwd !== 'string' || !isAbsolute(p.cwd)) throw new PtyError(400, tr('informe a pasta do projeto (caminho absoluto)'));
     const cwd = resolve(p.cwd);
     let isDir = false;
@@ -392,9 +388,15 @@ export class PtyManager {
       // tratado abaixo
     }
     if (!isDir) throw new PtyError(400, tr('pasta não encontrada: {0}', [cwd]));
+
     const accounts = this.opts.accounts();
     const account = typeof p.account === 'string' ? accounts.find((a) => a.id === p.account) : (accounts.find((a) => a.isDefault) ?? accounts[0]);
     if (!account) throw new PtyError(400, tr('conta desconhecida'));
+
+    const isAgy = account.provider === 'antigravity' || account.id.startsWith('antigravity:') || (!this.opts.claudeBin && !!this.opts.agyBin);
+    const binToRun = isAgy && this.opts.agyBin ? this.opts.agyBin : this.opts.claudeBin;
+    if (!binToRun || !isExecutableFile(binToRun)) throw new PtyError(503, tr('o executável não roda: {0}', [binToRun ?? 'CLI']));
+
     const running = [...this.ptys.values()].filter((t) => t.info.exitedAt === undefined).length;
     if (running + Math.max(0, reserved) >= MAX_PTYS) throw new PtyError(429, tr('limite de {0} terminais abertos', [MAX_PTYS]));
     return { cwd, account, cols: clampInt(p.cols, 20, 400, 100), rows: clampInt(p.rows, 5, 200, 30) };
@@ -410,7 +412,7 @@ export class PtyManager {
     else env.CLAUDE_CONFIG_DIR = account.dir;
 
     let proc: PtyProcess;
-    const isAgy = account.id.startsWith('antigravity:') || (!this.opts.claudeBin && !!this.opts.agyBin);
+    const isAgy = account.provider === 'antigravity' || account.id.startsWith('antigravity:') || (!this.opts.claudeBin && !!this.opts.agyBin);
     const binToRun = isAgy && this.opts.agyBin ? this.opts.agyBin : this.opts.claudeBin;
     try {
       const args = isAgy
