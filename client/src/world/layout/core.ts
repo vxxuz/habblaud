@@ -8,6 +8,8 @@ export const RECEPTION_ID = 'core:recepcao';
 export const RESTROOM_ID = 'core:banheiros';
 export const CAFE_ID = 'core:copa';
 export const LOUNGE_ID = 'core:lounge';
+export const CEO_ID = 'core:ceo';
+export const BOARDROOM_ID = 'core:boardroom';
 
 /** Paredes do núcleo: tons claros e neutros (frios), com acabamentos diferentes por ambiente. */
 export const CORE_WALLS = {
@@ -244,5 +246,74 @@ export function layoutLounge(): AreaLayout {
   // torcida do ping-pong: atrás da mesa, de frente para a câmera
   b.spot('watch', 10, 5, 'down', { group: 'watch:pingpong', dx: 2 });
   b.spot('watch', 12, 5, 'down', { group: 'watch:pingpong', dx: -2 });
+  return b.build();
+}
+
+export function layoutCeoSuite(): AreaLayout {
+  const b = new AreaBuilder(CEO_ID, 'ceo', { x: COL_W * 2, y: NORTH_Y, w: COL_W, h: ROOM_H });
+  const wall = CORE_WALLS.reception;
+  b.floor('wood', 0, 0, 16, 12, 601);
+  b.rug(2.5, 3.2, 11, 6.2, '#7a1c20', 602);
+  b.face(0.5, 15, wall);
+  b.cap(0, 0, 0.5, 12, wall);
+  b.cap(15.5, 0, 0.5, 12, wall);
+
+  b.walk(1, 2, 14, 10);
+  b.area.door = { x: COL_W * 2 + 7, y: NORTH_Y + 10, w: 2, h: 2 };
+
+  b.wall('painting', 5, undefined, { order: 0.5 });
+  b.wall('clock', 8, undefined, { order: 0.6 });
+  b.wall('sign', 10, undefined, { order: 0.7 });
+
+  b.furn('bookshelf', 1, 2, undefined, { order: 0.2 });
+  b.furn('binder_shelf', 3, 2, undefined, { order: 0.21 });
+  b.furn('filing_cabinet', 12, 2, undefined, { order: 0.22 });
+  b.furn('plant_tall', 14, 2, 'bonsai', { order: 0.23 });
+
+  b.furn('desk', 7, 5, 'dark', { order: 0.4 });
+  b.seat('office_chair', 'office_chair', 7, 4, 'down', 'black', { order: 0.35 });
+  b.spot('ceo_chair', 7, 4, 'down', { group: 'ceo' });
+
+  b.spot('ceo_visitor', 7, 7, 'up', { group: 'ceo', dy: -2 });
+
+  b.seat('armchair', 'armchair', 2, 6, 'right', 'red', { order: 0.55 });
+  b.furn('coffee_table', 3, 6, undefined, { order: 0.5 });
+  b.seat('armchair', 'armchair', 5, 6, 'left', 'red', { order: 0.55 });
+
+  b.furn('plant_tall', 1, 9, 'ficus', { order: 0.5 });
+  b.furn('plant_tall', 14, 9, 'monstera', { order: 0.5 });
+  b.furn('floor_lamp', 11, 4, undefined, { order: 0.38 });
+
+  return b.build();
+}
+
+export function layoutBoardroom(): AreaLayout {
+  const b = new AreaBuilder(BOARDROOM_ID, 'boardroom', { x: COL_W * 2, y: SOUTH_Y, w: COL_W, h: ROOM_H });
+  const wall = CORE_WALLS.lounge;
+  b.floor('marble', 0, 0, 16, 12, 701);
+  b.rug(2.5, 3.5, 11, 5.5, '#2e3a4e', 702);
+  b.face(0.5, 15, wall);
+  b.south(0.5, 15, 11, { ...wall, exterior: true });
+  b.cap(0, 0, 0.5, 12, wall);
+  b.cap(15.5, 0, 0.5, 12, wall);
+  b.walk(1, 2, 14, 9);
+  b.walk(7, 0, 2, 2);
+  b.area.door = { x: COL_W * 2 + 7, y: SOUTH_Y, w: 2, h: 2 };
+
+  b.wall('whiteboard', 6.5, undefined, { order: 0.4 });
+  b.wall('tv', 11.5, undefined, { order: 0.4 });
+
+  b.furn('meeting_table', 6, 5, undefined, { order: 0.4 });
+  b.seat('office_chair', 'office_chair', 6, 4, 'down', 'blue', { order: 0.35 });
+  b.seat('office_chair', 'office_chair', 8, 4, 'down', 'blue', { order: 0.35 });
+  b.seat('office_chair', 'office_chair', 6, 7, 'up', 'blue', { order: 0.45 });
+  b.seat('office_chair', 'office_chair', 8, 7, 'up', 'blue', { order: 0.45 });
+
+  b.furn('plant_tall', 1, 3, 'palm', { order: 0.3 });
+  b.furn('water_cooler', 14, 3, undefined, { order: 0.3 });
+  b.spot('water', 14, 4, 'up', { dy: -3 });
+  b.furn('plant_small', 1, 9, 'fern', { order: 0.5 });
+  b.furn('plant_tall', 14, 9, 'ficus', { order: 0.5 });
+
   return b.build();
 }
