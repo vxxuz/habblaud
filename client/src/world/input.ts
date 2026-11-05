@@ -40,7 +40,9 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
   const pointers = new Map<number, { x: number; y: number }>();
   let downX = 0;
   let downY = 0;
+  let downButton = 0;
   let dragging = false;
+  let rightDragged = false;
   let pinch: { dist: number; zoom: number; cx: number; cy: number } | null = null;
   let wheelAcc = 0;
   let wheelSettle: ReturnType<typeof setTimeout> | null = null;
@@ -54,7 +56,8 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
   };
 
   const onDown = (e: PointerEvent) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    // Permite botão esquerdo (0), meio (1) e direito (2) para grab/arrastar a tela
+    if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 1 && e.button !== 2) return;
     const p = local(e);
     pointers.set(e.pointerId, p);
     try {
@@ -65,11 +68,14 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
     if (pointers.size === 1) {
       downX = p.x;
       downY = p.y;
+      downButton = e.button;
       dragging = false;
+      if (e.button === 2) rightDragged = false;
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: camera.zoom, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
       dragging = true;
+      canvas.style.cursor = 'grabbing';
       h.interact();
     }
   };
@@ -95,10 +101,14 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
     }
     if (!dragging && Math.hypot(p.x - downX, p.y - downY) > DRAG_THRESHOLD) {
       dragging = true;
+      if (downButton === 2) rightDragged = true;
       canvas.style.cursor = 'grabbing';
       h.interact();
     }
-    if (dragging) camera.panBy(p.x - prev.x, p.y - prev.y);
+    if (dragging) {
+      canvas.style.cursor = 'grabbing';
+      camera.panBy(p.x - prev.x, p.y - prev.y);
+    }
   };
 
   const onUp = (e: PointerEvent) => {
@@ -116,18 +126,21 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
       dragging = false;
       return;
     }
-    const hit = h.pick(p.x, p.y);
-    if (e.pointerType !== 'mouse') {
-      // duplo toque
-      const now = performance.now();
-      if (now - lastTap.t < 320 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 24) {
-        h.doubleClick(hit);
-        lastTap = { t: 0, x: 0, y: 0 };
-        return;
+    // Clique simples (sem arrastar): botão esquerdo ou toque
+    if (e.pointerType !== 'mouse' || e.button === 0) {
+      const hit = h.pick(p.x, p.y);
+      if (e.pointerType !== 'mouse') {
+        // duplo toque
+        const now = performance.now();
+        if (now - lastTap.t < 320 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 24) {
+          h.doubleClick(hit);
+          lastTap = { t: 0, x: 0, y: 0 };
+          return;
+        }
+        lastTap = { t: now, x: p.x, y: p.y };
       }
-      lastTap = { t: now, x: p.x, y: p.y };
+      h.click(hit, p);
     }
-    h.click(hit, p);
   };
 
   const onCancel = (e: PointerEvent) => {
@@ -144,6 +157,14 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
   const onDbl = (e: MouseEvent) => {
     const p = local(e);
     h.doubleClick(h.pick(p.x, p.y));
+  };
+
+  const onContextMenu = (e: MouseEvent) => {
+    if (rightDragged) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      rightDragged = false;
+    }
   };
 
   const onWheel = (e: WheelEvent) => {
@@ -225,6 +246,7 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
   canvas.addEventListener('pointercancel', onCancel);
   canvas.addEventListener('pointerleave', onLeave);
   canvas.addEventListener('dblclick', onDbl);
+  canvas.addEventListener('contextmenu', onContextMenu, true);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   window.addEventListener('keydown', onKey);
   return () => {
@@ -234,6 +256,7 @@ export function attachInput(canvas: HTMLCanvasElement, camera: Camera, h: InputH
     canvas.removeEventListener('pointercancel', onCancel);
     canvas.removeEventListener('pointerleave', onLeave);
     canvas.removeEventListener('dblclick', onDbl);
+    canvas.removeEventListener('contextmenu', onContextMenu, true);
     canvas.removeEventListener('wheel', onWheel);
     window.removeEventListener('keydown', onKey);
     if (wheelSettle) clearTimeout(wheelSettle);

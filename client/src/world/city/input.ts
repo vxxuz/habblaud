@@ -71,7 +71,9 @@ export class CityInput {
   private readonly pointers = new Map<number, { x: number; y: number }>();
   private downX = 0;
   private downY = 0;
+  private downButton = 0;
   private dragging = false;
+  private rightDragged = false;
   private pinch: { dist: number; zoom: number; cx: number; cy: number } | null = null;
   private wheelAcc = 0;
   private wheelSettle: ReturnType<typeof setTimeout> | null = null;
@@ -92,6 +94,13 @@ export class CityInput {
     on(canvas, 'pointerup', (e: PointerEvent) => this.onUp(e));
     on(canvas, 'pointercancel', (e: PointerEvent) => this.onCancel(e));
     on(canvas, 'pointerleave', () => this.h.hover(0, 0, false));
+    on(canvas, 'contextmenu', (e: MouseEvent) => {
+      if (this.rightDragged) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.rightDragged = false;
+      }
+    }, { capture: true });
     on(canvas, 'wheel', (e: WheelEvent) => this.onWheel(e), { passive: false });
     on(window, 'keydown', (e: KeyboardEvent) => this.onKey(e, true));
     on(window, 'keyup', (e: KeyboardEvent) => this.onKey(e, false));
@@ -163,7 +172,7 @@ export class CityInput {
   }
 
   private onDown(e: PointerEvent): void {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 1 && e.button !== 2) return;
     const p = this.local(e);
     this.pointers.set(e.pointerId, p);
     try {
@@ -174,7 +183,9 @@ export class CityInput {
     if (this.pointers.size === 1) {
       this.downX = p.x;
       this.downY = p.y;
+      this.downButton = e.button;
       this.dragging = false;
+      if (e.button === 2) this.rightDragged = false;
     } else if (this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()] as [{ x: number; y: number }, { x: number; y: number }];
       this.pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: this.camera.zoom, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
@@ -204,10 +215,14 @@ export class CityInput {
     }
     if (!this.dragging && Math.hypot(p.x - this.downX, p.y - this.downY) > DRAG_THRESHOLD) {
       this.dragging = true;
+      if (this.downButton === 2) this.rightDragged = true;
       this.canvas.style.cursor = 'grabbing';
       this.h.interact();
     }
-    if (this.dragging) this.camera.panBy(p.x - prev.x, p.y - prev.y);
+    if (this.dragging) {
+      this.canvas.style.cursor = 'grabbing';
+      this.camera.panBy(p.x - prev.x, p.y - prev.y);
+    }
   }
 
   private onUp(e: PointerEvent): void {
@@ -224,7 +239,9 @@ export class CityInput {
       this.dragging = false;
       return;
     }
-    this.h.click(p.x, p.y, { shift: e.shiftKey });
+    if (e.pointerType !== 'mouse' || e.button === 0) {
+      this.h.click(p.x, p.y, { shift: e.shiftKey });
+    }
   }
 
   private onCancel(e: PointerEvent): void {

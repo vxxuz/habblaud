@@ -203,7 +203,9 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
   const setHover = (id: string | null) => {
     if (id === hover) return;
     hover = id;
-    canvas.style.cursor = id ? 'pointer' : 'grab';
+    if (canvas.style.cursor !== 'grabbing') {
+      canvas.style.cursor = id ? 'pointer' : 'grab';
+    }
     hoverCbs.forEach((cb) => cb(id));
   };
 

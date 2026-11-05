@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Camera } from './camera';
 import { attachInput, type InputHandlers } from './input';
 
@@ -95,6 +95,149 @@ describe('teclado da câmera', () => {
       target: { tagName: 'BODY', isContentEditable: false },
     });
     expect(pans).toEqual([[-90, 0]]);
+  });
+});
+
+describe('arrastar com mouse (pan / grab da câmera)', () => {
+  let win: ReturnType<typeof installWindow>;
+
+  beforeEach(() => {
+    win = installWindow();
+  });
+
+  afterEach(() => {
+    win?.restore();
+  });
+  function createEventCanvas() {
+    const listeners: Record<string, ((e: unknown) => void)[]> = {};
+    const captureListeners: Record<string, ((e: unknown) => void)[]> = {};
+    return {
+      style: {} as Record<string, string>,
+      addEventListener(type: string, fn: (e: unknown) => void, opts?: boolean | AddEventListenerOptions) {
+        const useCapture = typeof opts === 'boolean' ? opts : opts?.capture;
+        const target = useCapture ? captureListeners : listeners;
+        (target[type] ??= []).push(fn);
+      },
+      removeEventListener(type: string, fn: (e: unknown) => void, opts?: boolean | AddEventListenerOptions) {
+        const useCapture = typeof opts === 'boolean' ? opts : opts?.capture;
+        const target = useCapture ? captureListeners : listeners;
+        target[type] = (target[type] ?? []).filter((l) => l !== fn);
+      },
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+      setPointerCapture() {},
+      dispatch(type: string, ev: Record<string, unknown>) {
+        const e = {
+          defaultPrevented: false,
+          immediateStopped: false,
+          preventDefault() {
+            this.defaultPrevented = true;
+          },
+          stopImmediatePropagation() {
+            this.immediateStopped = true;
+          },
+          stopPropagation() {},
+          ...ev,
+        };
+        for (const fn of captureListeners[type] ?? []) {
+          if (e.immediateStopped) break;
+          fn(e);
+        }
+        for (const fn of listeners[type] ?? []) {
+          if (e.immediateStopped) break;
+          fn(e);
+        }
+        return e;
+      },
+    };
+  }
+
+  it('tahan klik kiri (button: 0) e arrastar move a câmera e não dispara clique', () => {
+    const cv = createEventCanvas();
+    const pans: [number, number][] = [];
+    let clicked = false;
+    const camera = { zoom: 1, panBy: (dx: number, dy: number) => pans.push([dx, dy]), zoomAt() {}, settle() {} } as unknown as Camera;
+    const off = attachInput(cv as unknown as HTMLCanvasElement, camera, {
+      ...handlers(),
+      click: () => {
+        clicked = true;
+      },
+    });
+
+    cv.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 100, clientY: 100 });
+    cv.dispatch('pointermove', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 120, clientY: 110 });
+    expect(pans).toEqual([[20, 10]]);
+    expect(cv.style.cursor).toBe('grabbing');
+
+    cv.dispatch('pointerup', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 120, clientY: 110 });
+    expect(clicked).toBe(false);
+    expect(cv.style.cursor).toBe('grab');
+    off();
+  });
+
+  it('tahan klik kanan (button: 2) e arrastar move a câmera e cancela menu de contexto', () => {
+    const cv = createEventCanvas();
+    const pans: [number, number][] = [];
+    let clicked = false;
+    const camera = { zoom: 1, panBy: (dx: number, dy: number) => pans.push([dx, dy]), zoomAt() {}, settle() {} } as unknown as Camera;
+    const off = attachInput(cv as unknown as HTMLCanvasElement, camera, {
+      ...handlers(),
+      click: () => {
+        clicked = true;
+      },
+    });
+
+    cv.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 2, clientX: 50, clientY: 50 });
+    cv.dispatch('pointermove', { pointerId: 1, pointerType: 'mouse', button: 2, clientX: 80, clientY: 90 });
+    expect(pans).toEqual([[30, 40]]);
+    expect(cv.style.cursor).toBe('grabbing');
+
+    cv.dispatch('pointerup', { pointerId: 1, pointerType: 'mouse', button: 2, clientX: 80, clientY: 90 });
+    expect(clicked).toBe(false);
+
+    // O contextmenu depois do drag com botão direito deve ser suprimido
+    const ctxEvent = cv.dispatch('contextmenu', { clientX: 80, clientY: 90 });
+    expect(ctxEvent.defaultPrevented).toBe(true);
+    expect(ctxEvent.immediateStopped).toBe(true);
+    off();
+  });
+
+  it('clique simples com botão esquerdo (sem arrastar) chama o handler de click', () => {
+    const cv = createEventCanvas();
+    let clicked = false;
+    const camera = { zoom: 1, panBy() {}, zoomAt() {}, settle() {} } as unknown as Camera;
+    const off = attachInput(cv as unknown as HTMLCanvasElement, camera, {
+      ...handlers(),
+      click: () => {
+        clicked = true;
+      },
+    });
+
+    cv.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 100, clientY: 100 });
+    cv.dispatch('pointerup', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 101, clientY: 101 });
+    expect(clicked).toBe(true);
+    off();
+  });
+
+  it('clique simples com botão direito (sem arrastar) não chama click e deixa o contextmenu passar', () => {
+    const cv = createEventCanvas();
+    let clicked = false;
+    const camera = { zoom: 1, panBy() {}, zoomAt() {}, settle() {} } as unknown as Camera;
+    const off = attachInput(cv as unknown as HTMLCanvasElement, camera, {
+      ...handlers(),
+      click: () => {
+        clicked = true;
+      },
+    });
+
+    cv.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 2, clientX: 100, clientY: 100 });
+    cv.dispatch('pointerup', { pointerId: 1, pointerType: 'mouse', button: 2, clientX: 101, clientY: 101 });
+    expect(clicked).toBe(false);
+
+    // Contextmenu não deve ser prevenido
+    const ctxEvent = cv.dispatch('contextmenu', { clientX: 101, clientY: 101 });
+    expect(ctxEvent.defaultPrevented).toBe(false);
+    expect(ctxEvent.immediateStopped).toBe(false);
+    off();
   });
 });
 
