@@ -257,7 +257,7 @@ export class Lighting {
   }
 
   private someoneIn(r: { x: number; y: number; w: number; h: number }): boolean {
-    for (const c of this.sim.chars.values()) {
+    for (const c of this.sim.people()) {
       if (c.gone || c.inside) continue;
       if (c.tx >= r.x && c.ty >= r.y && c.tx < r.x + r.w && c.ty < r.y + r.h) return true;
     }

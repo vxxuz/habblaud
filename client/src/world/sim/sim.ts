@@ -458,17 +458,15 @@ export class Sim {
       return;
     }
     const ch = new Character(ceoInfo, appearance);
-    ch.placeAtTile(ceoSpot.tx, ceoSpot.ty);
-    ch.x = ceoSpot.x;
-    ch.y = ceoSpot.y;
-    ch.dir = ceoSpot.dir;
-    ch.atSpot = ceoSpot.id;
+    ch.mode = 'idle';
+    ch.roomId = 'core:ceo';
+    this.spots.reserve(ceoSpot.id, ch.id);
+    this.snapTo(ch, ceoSpot);
     ch.homeSpot = ceoSpot.id;
     ch.inside = false;
     ch.alpha = 1;
-    ch.seated = !!ceoSpot.seated;
-    if (ceoSpot.seated) ch.sortY = ceoSpot.sortY ?? null;
     ch.setPose(ceoSpot.seated ? 'sit' : 'stand');
+    ch.nextOutingAt = this.now + between(ch.rng, 6000, 14000);
     this.ceo = ch;
   }
 
@@ -580,7 +578,7 @@ export class Sim {
     if (cols < cur && !force) {
       // só encolhe quando ninguém está na faixa que vai sumir
       const limit = cols * COL_W * TILE;
-      if ([...this.chars.values()].some((c) => !c.gone && c.x >= limit - TILE)) {
+      if ([...this.chars.values(), ...(this.ceo ? [this.ceo] : [])].some((c) => !c.gone && c.x >= limit - TILE)) {
         cols = cur;
         this.shrinkPending = true;
       } else this.shrinkPending = false;
@@ -595,12 +593,13 @@ export class Sim {
     this.finder.setGrid(building.grid);
     const lost = this.spots.setSpots(building.spots);
     for (const { owner } of lost) {
-      const ch = this.chars.get(owner);
+      const ch = this.chars.get(owner) ?? (this.ceo?.id === owner ? this.ceo : undefined);
       if (!ch) continue;
       if (ch.homeSpot && !this.spots.get(ch.homeSpot)) ch.homeSpot = null;
       ch.tempSpots = ch.tempSpots.filter((s) => this.spots.get(s));
     }
-    for (const ch of this.chars.values()) {
+    const allChars = this.ceo ? [...this.chars.values(), this.ceo] : [...this.chars.values()];
+    for (const ch of allChars) {
       if (ch.atSpot && !this.spots.get(ch.atSpot)) {
         ch.atSpot = null;
         ch.seated = false;
@@ -627,15 +626,12 @@ export class Sim {
     if (this.ceo) {
       const ceoSpot = this.spots.ofKind('ceo_chair')[0];
       if (ceoSpot) {
-        this.ceo.placeAtTile(ceoSpot.tx, ceoSpot.ty);
-        this.ceo.x = ceoSpot.x;
-        this.ceo.y = ceoSpot.y;
-        this.ceo.dir = ceoSpot.dir;
-        this.ceo.atSpot = ceoSpot.id;
+        this.spots.reserve(ceoSpot.id, this.ceo.id);
         this.ceo.homeSpot = ceoSpot.id;
         this.ceo.inside = false;
-        this.ceo.seated = !!ceoSpot.seated;
-        if (ceoSpot.seated) this.ceo.sortY = ceoSpot.sortY ?? null;
+        if (this.ceo.atSpot === ceoSpot.id || (!this.ceo.step && !this.ceo.queue.length && !this.ceo.atSpot)) {
+          this.snapTo(this.ceo, ceoSpot);
+        }
       }
     } else {
       this.initCeo();
@@ -654,10 +650,7 @@ export class Sim {
       if (ch.missingSince !== null && !ch.leaving && now - ch.missingSince >= MISSING_DEBOUNCE_MS) this.refreshMode(ch);
       this.runCharacter(ch, dt, now);
     }
-    if (this.ceo) {
-      this.ceo.animT += dt * 1000;
-      if (this.ceo.icon && now >= this.ceo.iconUntil) this.ceo.icon = null;
-    }
+    if (this.ceo) this.updateCeo(dt, now);
     if (this.visitor) this.runVisitor(this.visitor, dt, now);
     for (const [id, ch] of this.chars) {
       if (ch.gone) {
@@ -844,6 +837,71 @@ export class Sim {
   }
 
   // =================================================================== execução dos passos
+
+  private updateCeo(dt: number, now: number): void {
+    const ceo = this.ceo;
+    if (!ceo) return;
+    const ceoSpot = this.spots.ofKind('ceo_chair')[0];
+    if (!ceoSpot) return;
+    const needsApproval = [...this.chars.values()].some((c) => !c.gone && !c.leaving && !!c.info.pendingArtifact);
+    ceo.mode = needsApproval ? 'work' : 'idle';
+    ceo.info.status = needsApproval ? 'working' : 'idle';
+
+    if (needsApproval && ceo.atSpot !== ceoSpot.id) {
+      const allSteps = ceo.step ? [ceo.step, ...ceo.queue] : ceo.queue;
+      const alreadyReturning =
+        allSteps.length > 0 &&
+        allSteps.every(
+          (s) =>
+            s.t === 'exit' ||
+            s.t === 'do' ||
+            (s.t === 'go' && s.tx === ceoSpot.tx && s.ty === ceoSpot.ty) ||
+            (s.t === 'enter' && s.spot === ceoSpot.id),
+        );
+      if (!alreadyReturning) {
+        this.interrupt(ceo);
+        this.releaseTemp(ceo);
+        ceo.setIcon('alert', 3000, now);
+        if (!ceo.step) {
+          const steps: Step[] = [];
+          this.pushLeave(ceo, steps);
+          steps.push(
+            { t: 'go', tx: ceoSpot.tx, ty: ceoSpot.ty, dir: ceoSpot.dir, run: true },
+            { t: 'enter', spot: ceoSpot.id },
+          );
+          ceo.queue.push(...steps);
+        }
+      }
+    }
+
+    this.runCharacter(ceo, dt, now);
+  }
+
+  private thinkCeo(ch: Character, now: number): boolean {
+    const ceoSpot = this.spots.ofKind('ceo_chair')[0];
+    if (!ceoSpot) return false;
+    ch.homeSpot = ceoSpot.id;
+    const needsApproval = [...this.chars.values()].some((c) => !c.gone && !c.leaving && !!c.info.pendingArtifact);
+    if (ch.atSpot !== ceoSpot.id) {
+      const steps: Step[] = [];
+      this.pushLeave(ch, steps);
+      steps.push(
+        { t: 'go', tx: ceoSpot.tx, ty: ceoSpot.ty, dir: ceoSpot.dir, run: needsApproval },
+        { t: 'enter', spot: ceoSpot.id },
+        { t: 'do', fn: () => (ch.nextOutingAt = this.now + idleSitMs(ch.rng, this.options().liveliness)) },
+      );
+      ch.queue.push(...steps);
+      return true;
+    }
+    if (!needsApproval) {
+      if (!ch.nextOutingAt) ch.nextOutingAt = now + idleSitMs(ch.rng, this.options().liveliness);
+      if (now >= ch.nextOutingAt) {
+        if (this.planOuting(ch, now)) return true;
+        ch.nextOutingAt = now + idleSitMs(ch.rng, this.options().liveliness);
+      }
+    }
+    return false;
+  }
 
   private runCharacter(ch: Character, dt: number, now: number): void {
     // animação
@@ -1251,6 +1309,7 @@ export class Sim {
   /** Decide o próximo plano. Retorna true se planejou algo. */
   private think(ch: Character, now: number): boolean {
     if (ch.gone) return false;
+    if (ch === this.ceo) return this.thinkCeo(ch, now);
     if (ch.mode === 'leave') return this.planLeave(ch, now);
     if (ch.mode === 'deliver') return this.planDeliver(ch, now);
     if (ch.info.pendingArtifact) return this.planCeoReview(ch, now);
@@ -1586,12 +1645,13 @@ export class Sim {
     const near = { tx: ch.tx, ty: ch.ty };
     const rng = ch.rng;
     const persona = personaFor(ch.info.seed);
+    const isCeo = ch === this.ceo;
     // colegas à toa: a vontade é de companhia (a personalidade dosa) — TV, jogo, papo, aposta...
-    if (this.social.hasCompany(ch, now) && rng() < 0.45 + persona.sociability * 0.4 && this.social.tryInitiate(ch, now, false)) return true;
+    if (!isCeo && this.social.hasCompany(ch, now) && rng() < 0.45 + persona.sociability * 0.4 && this.social.tryInitiate(ch, now, false)) return true;
     const avail: Partial<Record<IdleActivity, boolean>> = {
       coffee: !!this.spots.findFree('coffee', { by: ch.id }),
       water: !!this.spots.findFree('water', { by: ch.id }),
-      bathroom: !!this.spots.findFree('stall', { by: ch.id }),
+      bathroom: !isCeo && !!this.spots.findFree('stall', { by: ch.id }),
       lounge: LOUNGE_SEATS.some((k) => !!this.spots.findFree(k, { by: ch.id })),
       // jogos e conversas são rodas (social/): aqui só o que se faz sozinho
       pingpong: false,
@@ -1601,7 +1661,7 @@ export class Sim {
       arcade: !!this.spots.findFree('arcade', { by: ch.id }),
       snack: !!this.spots.findFree('snack', { by: ch.id }),
       stretch: true,
-      mirror: !!this.social.plan('mirror', 1, ch),
+      mirror: !isCeo && !!this.social.plan('mirror', 1, ch),
       phone: !!this.randomFree(PHONE_SEATS, ch),
     };
     const what = pickIdleActivity(rng, avail, soloWeights(persona));
@@ -1828,6 +1888,7 @@ export class Sim {
 
   /** Ocioso há muito tempo (cochila na mesa, nem sempre aceita convite)? Na visita, nunca: o tempo não veio do mundo. */
   longIdle(ch: Character, now: number): boolean {
+    if (ch === this.ceo) return false;
     return !this.visit && isLongIdle(ch.info.status, ch.info.statusSince, now);
   }
 
@@ -2028,6 +2089,19 @@ export class Sim {
       room.switchClaim = null;
     }
     this.stallBusy.clear();
+    if (this.ceo) {
+      this.clearPlan(this.ceo);
+      this.ceo.alpha = 1;
+      this.ceo.inside = false;
+      const ceoSpot = this.spots.ofKind('ceo_chair')[0];
+      if (ceoSpot) {
+        this.spots.reserve(ceoSpot.id, this.ceo.id);
+        this.ceo.homeSpot = ceoSpot.id;
+        this.snapTo(this.ceo, ceoSpot);
+      }
+      this.ceo.nextOutingAt = now + idleSitMs(this.ceo.rng, this.options().liveliness);
+      this.restPose(this.ceo, now);
+    }
     // o visitante termina o que fazia: chega ao hall ou, saindo, entra no elevador (e a saída acontece)
     const v = this.visitor;
     if (v) {

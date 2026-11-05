@@ -802,4 +802,49 @@ describe('espera de shell', () => {
     expect(ana.shellCount).toBe(1);
     expect(ana.pose).toBe('wait');
   });
+
+  it('CEO: sai para passear quando livre e volta correndo para a sala ao receber pedido de aprovação', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    const rooms = [room('/a', 0)];
+    sim.applySnapshot(snap(rooms, [agent('ana', '/a', 'working')]), clock.now);
+    const ceo = sim.ceo!;
+    expect(ceo).toBeTruthy();
+    expect(ceo.inside).toBe(false);
+    const ceoChair = sim.spots.ofKind('ceo_chair')[0]!;
+    expect(ceo.atSpot).toBe(ceoChair.id);
+
+    // Quando o horário de passeio chega e não há aprovação pendente, o CEO sai da cadeira
+    ceo.nextOutingAt = clock.now;
+    run(sim, clock, 3, () => ceo.atSpot !== ceoChair.id);
+    expect(ceo.atSpot).not.toBe(ceoChair.id);
+
+    // Quando um agente passa a ter pendingArtifact, o CEO interrompe o passeio e volta correndo para a cadeira
+    sim.applySnapshot(
+      snap(
+        rooms,
+        [
+          agent('ana', '/a', 'waiting', {
+            pendingArtifact: {
+              id: 'art-1',
+              sessionId: 'sess-1',
+              name: 'implementation-plan',
+              summary: 'Plano de implementação',
+              path: '/tmp/plan.md',
+              updatedAt: clock.now,
+            },
+          }),
+        ],
+        2,
+      ),
+      clock.now,
+    );
+    run(sim, clock, 0.2);
+    expect(ceo.icon).toBe('alert');
+    expect(ceo.mode).toBe('work');
+
+    run(sim, clock, 20, () => ceo.atSpot === ceoChair.id);
+    expect(ceo.atSpot).toBe(ceoChair.id);
+    expect(ceo.seated).toBe(true);
+  });
 });

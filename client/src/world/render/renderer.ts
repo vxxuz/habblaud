@@ -797,7 +797,7 @@ export class Renderer {
     const room = area.room;
     if (room && room.light(this.sim.now) < 0.3) return 'off';
     const owner = f.seatSpot ? this.sim.spots.ownerOf(f.seatSpot) : undefined;
-    const ch = owner ? this.sim.chars.get(owner) : undefined;
+    const ch = owner ? this.sim.person(owner) : undefined;
     if (!ch || ch.leaving) return 'off';
     const seated = ch.atSpot === f.seatSpot;
     if (ch.mode === 'wait') return 'alert';
@@ -1036,7 +1036,7 @@ export class Renderer {
    */
   private drawReflection(w: WallVis, gx: number, gy: number, gw: number, gh: number): void {
     const { ctx } = this;
-    for (const ch of this.sim.chars.values()) {
+    for (const ch of this.sim.people()) {
       if (ch.inside || ch.alpha < 0.5 || ch.dir !== 'up' || ch.seated) continue;
       if (Math.abs(ch.x - w.cx) > 5) continue;
       const dy = ch.y - w.baseY;

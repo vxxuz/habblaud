@@ -270,10 +270,10 @@ export function layoutCeoSuite(): AreaLayout {
   b.furn('filing_cabinet', 12, 2, undefined, { order: 0.22 });
   b.furn('plant_tall', 14, 2, 'bonsai', { order: 0.23 });
 
-  b.furn('desk', 7, 5, 'dark', { order: 0.4 });
-  b.seat('ceo_chair', 'office_chair', 7, 4, 'down', 'black', { order: 0.35, group: 'ceo' });
+  const back = b.furn('desk_back', 7, 5, 'dark', { order: 0.4, seat: 'ceo' });
+  b.seat('ceo_chair', 'office_chair_front', 7, 4, 'down', 'black', { dx: TILE / 2, deskId: back, side: 'N', order: 0.35, group: 'ceo' });
 
-  b.spot('ceo_visitor', 7, 7, 'up', { group: 'ceo', dy: -2 });
+  b.spot('ceo_visitor', 7, 7, 'up', { group: 'ceo', dx: TILE / 2, dy: -2 });
 
   b.seat('armchair', 'armchair', 2, 6, 'right', 'red', { order: 0.55 });
   b.furn('coffee_table', 3, 6, undefined, { order: 0.5 });
