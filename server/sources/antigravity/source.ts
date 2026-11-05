@@ -6,6 +6,7 @@ import type { AccountsService } from '../../accounts/service';
 import type { Office } from '../../model/office';
 import type { AgentSource } from '../source';
 import { FileTail } from '../tail';
+import { tr } from '../../../shared/i18n';
 import {
   getSessionMetadata,
   openAntigravityDb,
