@@ -25,7 +25,7 @@ export function formatArtifactTitle(artifactId: string): string {
 }
 
 export function formatArtifactSummary(summary: string): string {
-  if (!summary || !summary.trim()) return tr('Sem resumo fornecido.');
+  if (!summary || !summary.trim()) return tr('No summary provided.');
   return summary.trim();
 }
 
@@ -49,13 +49,13 @@ export class CeoApprovalCard {
 
   constructor(private ctx: UiContext) {
     const headIcon = h('span', { class: 'ui-ceo__icon', text: '👑' });
-    const headTitle = h('span', { class: 'ui-ceo__title', text: tr('Persetujuan CEO / Executive Review') });
+    const headTitle = h('span', { class: 'ui-ceo__title', text: tr('CEO Approval / Executive Review') });
     const head = h('div', { class: 'ui-ceo__head' }, headIcon, headTitle);
 
     this.itemsContainer = h('div', { class: 'ui-ceo__items' });
     this.emptyNotice = h('p', {
       class: 'ui-ceo__agent ui-muted',
-      text: tr('Tidak ada dokumen yang menunggu persetujuan CEO saat ini. Semua agen bekerja normal.'),
+      text: tr('No documents are awaiting CEO approval right now. All agents are working normally.'),
       hidden: true,
     });
 
@@ -107,12 +107,12 @@ export class CeoApprovalCard {
     const agentIntro = h('p', {
       class: 'ui-ceo__agent',
       text: isCeoView
-        ? tr('Agen {0} sedang menghadap Anda membawa dokumen:', [agent.name])
-        : tr('Agen sedang menghadap CEO di Executive Suite membawa dokumen:'),
+        ? tr('Agent {0} is in your office presenting a document:', [agent.name])
+        : tr('Agent is in the Executive Suite presenting a document to the CEO:'),
     });
 
     const docTitle = h('span', { class: 'ui-ceo__doc-name', text: formatArtifactTitle(artifact.id) });
-    const copyBtn = iconButton(ICONS.copy, tr('Salin path artifact'), async () => {
+    const copyBtn = iconButton(ICONS.copy, tr('Copy artifact path'), async () => {
       const ok = await copyText(artifact.path);
       copyBtn.innerHTML = ok ? ICONS.check : ICONS.copy;
       setTimeout(() => {
@@ -129,7 +129,7 @@ export class CeoApprovalCard {
 
     const feedbackInput = h('textarea', {
       class: 'ui-ceo__feedback',
-      attrs: { rows: 3, placeholder: tr('Catatan revisi untuk agen…') },
+      attrs: { rows: 3, placeholder: tr('Revision notes for the agent…') },
     });
 
     let denyForm: HTMLElement;
@@ -137,17 +137,17 @@ export class CeoApprovalCard {
     const approveBtn = h('button', {
       class: 'ui-btn ui-ceo__btn--approve',
       type: 'button',
-      text: tr('✓ Setujui (Approve)'),
+      text: tr('✓ Approve'),
       on: {
         click: async () => {
           approveBtn.disabled = true;
           rejectToggleBtn.disabled = true;
           setHidden(statusText, false);
-          setText(statusText, tr('Menyetujui dokumen…'));
+          setText(statusText, tr('Approving document…'));
 
           const ok = await this.sendDecision(agent.id, artifact.id, 'approve');
           if (ok) {
-            setText(statusText, tr('✓ Dokumen disetujui! Agen melanjutkan tugas.'));
+            setText(statusText, tr('✓ Document approved! Agent is resuming work.'));
             setTimeout(() => {
               itemEl.remove();
               this.ctx.invalidate();
@@ -163,7 +163,7 @@ export class CeoApprovalCard {
     const rejectToggleBtn = h('button', {
       class: 'ui-btn ui-ceo__btn--reject',
       type: 'button',
-      text: tr('✕ Tolak / Feedback…'),
+      text: tr('✕ Reject / Feedback…'),
       on: {
         click: () => {
           const isHidden = denyForm.hidden;
@@ -179,7 +179,7 @@ export class CeoApprovalCard {
     const submitRejectBtn = h('button', {
       class: 'ui-btn ui-ceo__btn--reject',
       type: 'button',
-      text: tr('Kirim Penolakan'),
+      text: tr('Send Rejection'),
       on: {
         click: async () => {
           const feedback = feedbackInput.value.trim();
@@ -187,11 +187,11 @@ export class CeoApprovalCard {
           rejectToggleBtn.disabled = true;
           submitRejectBtn.disabled = true;
           setHidden(statusText, false);
-          setText(statusText, tr('Mengirim revisi…'));
+          setText(statusText, tr('Sending revision notes…'));
 
           const ok = await this.sendDecision(agent.id, artifact.id, 'reject', feedback);
           if (ok) {
-            setText(statusText, tr('Revisi dikirim ke agen.'));
+            setText(statusText, tr('Revision notes sent to agent.'));
             setTimeout(() => {
               itemEl.remove();
               this.ctx.invalidate();
@@ -208,7 +208,7 @@ export class CeoApprovalCard {
     const cancelRejectBtn = h('button', {
       class: 'ui-btn',
       type: 'button',
-      text: tr('Batal'),
+      text: tr('Cancel'),
       on: {
         click: () => {
           setHidden(denyForm, true);

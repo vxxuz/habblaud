@@ -2205,8 +2205,8 @@ export const FR: Readonly<Record<string, string>> = {
   "indisponível no Docker (rode com npm start)": "indisponible dans Docker (lancez avec npm start)",
   "mesma trava do terminal ({0})": "même verrou que le terminal ({0})",
   "HABBLAUD_CLAUDE_BIN não encontrado no PATH ({0})": "HABBLAUD_CLAUDE_BIN introuvable dans le PATH ({0})",
-  "executável \"claude\" não encontrado no PATH (defina HABBLAUD_CLAUDE_BIN)": "exécutable \"claude\" introuvable dans le PATH (définissez HABBLAUD_CLAUDE_BIN)",
-  "o executável do Claude Code não roda: {0} (confira o HABBLAUD_CLAUDE_BIN)": "l'exécutable de Claude Code ne se lance pas : {0} (vérifiez HABBLAUD_CLAUDE_BIN)",
+  "nenhum executável (\"claude\" ou \"agy\") encontrado no PATH": "aucun exécutable (\"claude\" ou \"agy\") trouvé dans le PATH",
+  "o executável não roda: {0}": "l'exécutable ne se lance pas : {0}",
   "Terminal interativo sem a tela completa ({0}): ao reconectar, modos como a colagem entre colchetes podem se perder.": "Terminal interactif sans l'écran complet ({0}) : à la reconnexion, des modes comme le collage entre crochets peuvent être perdus.",
   "   Terminal interativo: ligado ({0}).": "   Terminal interactif : activé ({0}).",
   "   Terminal interativo: {0}.": "   Terminal interactif : {0}.",
@@ -2231,7 +2231,7 @@ export const FR: Readonly<Record<string, string>> = {
   "informe a pasta do projeto (caminho absoluto)": "indiquez le dossier du projet (chemin absolu)",
   "pasta não encontrada: {0}": "dossier introuvable : {0}",
   "limite de {0} terminais abertos": "limite de {0} terminaux ouverts",
-  "não consegui abrir o Claude Code: {0}": "impossible d'ouvrir Claude Code : {0}",
+  "não consegui abrir o terminal: {0}": "impossible d'ouvrir le terminal : {0}",
   "Terminal {0} aberto em {1} (conta {2}, retomando {3}).": "Terminal {0} ouvert dans {1} (compte {2}, reprise de {3}).",
   "Terminal {0} aberto em {1} (conta {2}).": "Terminal {0} ouvert dans {1} (compte {2}).",
   "só dá para encerrar ou assumir o agente principal de uma sessão": "seul l'agent principal d'une session peut être fermé ou repris en main",
@@ -2268,7 +2268,7 @@ export const FR: Readonly<Record<string, string>> = {
 
   // client/src/ui/drawer.ts e daystats.ts (textos do terminal interativo e do Meu dia)
   "Nova sessão": "Nouvelle session",
-  "Abre um Claude Code novo nesta pasta, num terminal interativo": "Ouvre un nouveau Claude Code dans ce dossier, dans un terminal interactif",
+  "Abre uma sessão nova nesta pasta, num terminal interativo": "Ouvre une nouvelle session dans ce dossier, dans un terminal interactif",
   "em {0}": "dans {0}",
 
   // client/src/ui/deliveries.ts
@@ -2371,7 +2371,7 @@ export const FR: Readonly<Record<string, string>> = {
   "{0} · responda no Claude Code: este pedido não chegou ao Habblaud ou passou do tempo de espera": "{0} · répondez dans Claude Code : cette demande n'est pas arrivée à Habblaud ou a dépassé le délai d'attente",
 
   // client/src/ui/topbar.ts
-  "Novo agente: começa uma sessão do Claude Code no computador": "Nouvel agent : lance une session Claude Code sur l'ordinateur",
+  "Novo agente: começa uma sessão no computador": "Nouvel agent : lance une session sur l'ordinateur",
 
   // server/deliveries/deliveries.ts
   "Tela capturada pelo agente": "Capture d'écran prise par l'agent",
@@ -3290,4 +3290,38 @@ export const FR: Readonly<Record<string, string>> = {
   "Carimbo deixado na portaria: {0}": "Tampon laissé à l'accueil : {0}",
   "Entre no prédio ou chegue mais perto da porta para carimbar.": "Entrez dans l'immeuble ou approchez-vous de la porte pour tamponner.",
   "O carimbo não foi deixado. Tente de novo.": "Le tampon n'a pas été laissé. Réessayez.",
+  // Antigravity & CEO Suite integration
+  "No summary provided.": "No summary provided.",
+  "CEO Approval / Executive Review": "CEO Approval / Executive Review",
+  "No documents are awaiting CEO approval right now. All agents are working normally.": "No documents are awaiting CEO approval right now. All agents are working normally.",
+  "Agent {0} is in your office presenting a document:": "Agent {0} is in your office presenting a document:",
+  "Agent is in the Executive Suite presenting a document to the CEO:": "Agent is in the Executive Suite presenting a document to the CEO:",
+  "Copy artifact path": "Copy artifact path",
+  "Revision notes for the agent…": "Revision notes for the agent…",
+  "✓ Approve": "✓ Approve",
+  "Approving document…": "Approving document…",
+  "✓ Document approved! Agent is resuming work.": "✓ Document approved! Agent is resuming work.",
+  "✕ Reject / Feedback…": "✕ Reject / Feedback…",
+  "Send Rejection": "Send Rejection",
+  "Sending revision notes…": "Sending revision notes…",
+  "Revision notes sent to agent.": "Revision notes sent to agent.",
+  "Cancel": "Cancel",
+  "Para responder, use o Antigravity": "To reply, use Antigravity",
+  "O Antigravity não está pronto para receber comandos": "Antigravity isn't ready to receive commands",
+  "Envia o comando diretamente ao Antigravity. Enter manda; Shift+Enter quebra a linha.": "Sends the command directly to Antigravity. Enter sends; Shift+Enter adds a line break.",
+  "ao terminal do Antigravity{0}": "to the Antigravity terminal{0}",
+  "CEO": "CEO",
+  "Aprovar": "Approve",
+  "Aprovar pelo CEO": "Approve as CEO",
+  "Agente do Antigravity (Google)": "Antigravity agent (Google)",
+  "serviço do CEO desligado": "CEO service is disabled",
+  "   Antigravity: {0} sessão(ões) ativa(s) · {1}": "   Antigravity: {0} active session(s) · {1}",
+  "   Novo agente: ligado (Antigravity agy: {0}).": "   New agent: on (Antigravity agy: {0}).",
+  "   Mensagens pelo escritório: ligadas (Antigravity nativo via agy).": "   Office messages: on (native Antigravity via agy).",
+  "não há como entregar ao Antigravity agora: agy não encontrado": "can't deliver to Antigravity right now: agy not found",
+  "o Antigravity demorou demais para processar a mensagem": "Antigravity took too long to process the message",
+  "o Antigravity recusou o comando": "Antigravity rejected the command",
+  "aprovar artifact com o CEO": "approve artifact with the CEO",
+  "👑 {0} precisa de aprovação do CEO para {1}": "👑 {0} needs CEO approval for {1}",
+  "Agente Antigravity {0} assumido pelo escritório (sessão {1}).": "Antigravity agent {0} taken over by the office (session {1}).",
 };

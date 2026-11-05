@@ -57,7 +57,7 @@ describe('CEO Approval Card Model & Logic', () => {
   });
 
   it('formatArtifactSummary handles empty or multiline text', () => {
-    expect(formatArtifactSummary('')).toBe('Sem resumo fornecido.');
+    expect(formatArtifactSummary('')).toBe('No summary provided.');
     expect(formatArtifactSummary('Detailed step-by-step plan')).toBe('Detailed step-by-step plan');
   });
 
@@ -69,12 +69,12 @@ describe('CEO Approval Card Model & Logic', () => {
       decision: 'approve',
     });
 
-    const reject = ceoDecisionPayload('ag1', 'plan-1', 'reject', 'Perlu perbaikan struktur');
+    const reject = ceoDecisionPayload('ag1', 'plan-1', 'reject', 'Needs structural improvements');
     expect(reject).toEqual({
       agentId: 'ag1',
       artifactId: 'plan-1',
       decision: 'reject',
-      feedback: 'Perlu perbaikan struktur',
+      feedback: 'Needs structural improvements',
     });
   });
 });

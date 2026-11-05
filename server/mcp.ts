@@ -1,7 +1,7 @@
-// Servidor MCP (Model Context Protocol) via stdio para o Habblaud.
-// Quando o Antigravity abre, ele inicia este processo MCP automaticamente via ~/.gemini/config/mcp_config.json.
-// Ao iniciar (e a cada chamada de ferramenta), garante que o servidor web do Habblaud (http://127.0.0.1:4747)
-// esteja rodando em background (detached) sem poluir o stdout do protocolo JSON-RPC.
+// MCP (Model Context Protocol) stdio server for Habblaud.
+// When Antigravity launches, it automatically starts this MCP process via ~/.gemini/config/mcp_config.json.
+// On startup (and on every tool call), it ensures the Habblaud web server (http://127.0.0.1:4747)
+// is running in the background (detached) without polluting JSON-RPC stdout.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -372,7 +372,7 @@ export async function handleMcpRequest(msg: {
 }
 
 export function startMcpStdio(): void {
-  // Garante imediatamente ao abrir o Antigravity que o servidor web 4747 suba em background
+  // Immediately ensure the background web server on port 4747 is running when Antigravity starts
   void ensureHabblaudRunning();
 
   const rl = readline.createInterface({
