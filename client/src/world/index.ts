@@ -432,6 +432,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
       if (p.x < 0 || p.y < 0 || p.x > camera.viewW || p.y > camera.viewH) return null;
       return p;
     },
+    agent: (id) => sim.person(id)?.info,
     social: (id) => sim.social.info(id),
     onRoomContextMenu: (cb) => {
       roomMenuCbs.add(cb);

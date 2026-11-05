@@ -39,6 +39,8 @@ import { ClaudeWatcher } from './sources/watcher';
 import { discoverCodexDirs } from './sources/codex/accounts';
 import { CodexHistory } from './sources/codex/history';
 import { CodexSource } from './sources/codex/source';
+import { createCeoRoutes } from './ceo/routes';
+import { ArtifactScanner } from './sources/antigravity/artifacts';
 import { AntigravitySource } from './sources/antigravity/source';
 import { getAntigravityHome } from './sources/antigravity/detector';
 import { AntigravityHistory } from './sources/antigravity/history';
@@ -320,6 +322,8 @@ const messages = config.messages
     })
   : undefined;
 late.messages = messages;
+const ceoScanner = new ArtifactScanner({ approvalsPath: join(antigravityDir, 'approved_artifacts.json') });
+const ceoRoutes = createCeoRoutes({ scanner: ceoScanner, office, messages });
 
 // Terminal interativo (abrir/assumir sessões e encerrar agentes): opt-in com HABBLAUD_PTY=1 (ou agy detectado), só com bind local, fora
 // do Docker, com node-pty e o executável do claude ou agy no PATH.
@@ -412,6 +416,7 @@ const api = createApiHandler({
   timeline: createTimelineHandler({ dir: timelineDir, recording: !!timeline }),
   permissions: permissions ? createPermissionRoutes(permissions) : undefined,
   messages: messages ? createMessageRoutes(messages) : undefined,
+  ceo: ceoRoutes,
   pty: ptys ? createPtyRoutes(ptys) : undefined,
   spawn,
   attachments,

@@ -101,7 +101,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi,
     },
     now: () => timelapse?.replayTime ?? Date.now() + skew,
     account: (id) => store.snapshot?.accounts.find((a) => a.id === id),
-    agent: (id) => store.agent(id),
+    agent: (id) => store.agent(id) ?? world.agent?.(id),
     selection: () => selection,
     select(sel, opts) {
       // Na cidade o escritório (gaveta, terminal) fica escondido: escolher um agente ou sala volta para ele. Antes de

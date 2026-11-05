@@ -53,6 +53,10 @@ export interface ApiDeps {
    */
   messages?: (req: IncomingMessage, res: ServerResponse, path: string) => void;
   /**
+   * Rotas de aprovação do CEO (/api/ceo/decision).
+   */
+  ceo?: (req: IncomingMessage, res: ServerResponse, path: string) => void;
+  /**
    * Terminal interativo e ações nos agentes (/api/pty/*, POST /api/agents/:id/stop|takeover; http/pty.ts).
    * Ausente = desligado (sem HABBLAUD_PTY=1, Docker, sem node-pty ou sem bind local).
    */
@@ -448,6 +452,14 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
         sendJson(res, 403, { error: denied(req, tr('pedidos de permissão só são respondidos pelo próprio computador (http://localhost ou http://127.0.0.1)')) });
       } else {
         deps.permissions(req, res, path);
+      }
+      return true;
+    }
+    if (path === '/api/ceo' || path.startsWith('/api/ceo/')) {
+      if (!deps.ceo) {
+        sendJson(res, 503, { error: tr('serviço do CEO desligado') });
+      } else {
+        deps.ceo(req, res, path);
       }
       return true;
     }

@@ -2,6 +2,8 @@
 // Implementação: client/src/world/index.ts -> createWorld().
 // Regra: mudanças aqui devem ser ADITIVAS.
 
+import type { AgentInfo } from '../../shared/types';
+
 export type Selection = { type: 'agent'; id: string } | { type: 'room'; id: string } | null;
 
 export interface WorldOptions {
@@ -70,6 +72,8 @@ export interface WorldApi {
   setOptions(o: Partial<WorldOptions>): void;
   /** Posição na tela (CSS px, relativo à viewport) logo acima da cabeça do personagem, ou null se não visível. */
   screenPositionOf(agentId: string): { x: number; y: number } | null;
+  /** (Opcional, aditivo) Informações de um personagem do mundo (ex.: CEO permanente). */
+  agent?(id: string): AgentInfo | undefined;
   /**
    * (Opcional, aditivo) Área da tela coberta por painéis da UI, em px CSS. O mundo passa a enquadrar
    * (visão geral) e centralizar (focusAgent/focusRoom/seguir) dentro da área livre.

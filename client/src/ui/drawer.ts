@@ -40,6 +40,7 @@ import {
 } from './model';
 import { access } from '../net/access';
 import { PermissionCard } from './permission';
+import { CeoApprovalCard } from './ceo-card';
 import { canRenameRoom } from './roomrename';
 import { accountChipLabel, accountProvider, CODEX_LIVE_HINT, codexApprovalLabel, providerOf } from './provider';
 import { ptyControllable } from './ptyapi';
@@ -231,6 +232,8 @@ class AgentView {
   private alertAnswerHint: HTMLElement;
   /** Pedido de permissão (ou pergunta) para responder por aqui (substitui o alerta genérico enquanto existe). */
   private perm: PermissionCard;
+  /** Cartão de aprovação executiva do CEO quando um artifact aguarda decisão. */
+  private ceoCard: CeoApprovalCard;
   private shellBox: HTMLElement;
   private shellText: HTMLElement;
   private shellMood: HTMLElement;
@@ -258,6 +261,7 @@ class AgentView {
   /** Quantos itens da linha do tempo aparecem agora. */
   private timelineShown = TIMELINE_STEP;
   private stats: KvList<StatKey>;
+  private statsSec: ReturnType<typeof section>;
   private social: SocialSection;
   readonly character: CharacterEditor;
   private sessionValue: HTMLElement;
@@ -361,6 +365,7 @@ class AgentView {
     this.msgSec.el.classList.add('ui-sec--msg');
     this.social = new SocialSection(ctx);
     this.perm = new PermissionCard(ctx);
+    this.ceoCard = new CeoApprovalCard(ctx);
 
     this.tasksBar = createProgress(tr('Progresso das tarefas'));
     const tasksList = h('ul', { class: 'ui-tasks' });
@@ -400,7 +405,7 @@ class AgentView {
       ['duration', tr('Duração')],
       ['bg', tr('Execução')],
     ]);
-    const statsSec = section(tr('Estatísticas'), this.stats.el);
+    this.statsSec = section(tr('Estatísticas'), this.stats.el);
     this.codexHint = h('p', { class: 'ui-codex-hint', hidden: true }, ...richText(CODEX_LIVE_HINT));
 
     this.el = h(
@@ -414,6 +419,7 @@ class AgentView {
       this.termBtn,
       this.termWhy,
       this.alert,
+      this.ceoCard.el,
       this.perm.el,
       this.shellBox,
       this.shellsSec.el,
@@ -423,7 +429,7 @@ class AgentView {
       this.tasksSec.el,
       this.teamSec.el,
       this.timelineSec.el,
-      statsSec.el,
+      this.statsSec.el,
       this.codexHint,
     );
   }
@@ -566,11 +572,16 @@ class AgentView {
     setAttr(this.followBtn, 'aria-pressed', String(following));
     this.followBtn.classList.toggle('is-on', following);
     this.renderTerminalButton(!!live);
+    if (this.id === 'ceo:inok') {
+      setHidden(this.termBtn, true);
+      setHidden(this.termWhy, true);
+    }
 
     // Alerta.
     const waiting = a.status === 'waiting' && !!live;
+    this.ceoCard.render(live, this.ctx.store.snapshot?.agents);
     this.perm.render(live);
-    setHidden(this.alert, !waiting || this.perm.visible);
+    setHidden(this.alert, !waiting || this.perm.visible || this.ceoCard.visible);
     if (waiting) {
       const accName = account?.name ?? a.account;
       // Codex: "Vá ao Codex (Conta X)"; sem repetir quando a conta já se chama "Codex".
@@ -620,21 +631,24 @@ class AgentView {
     setText(this.actDetail, detail);
 
     // Mandar mensagem: só para principais presentes (com o recurso ligado e a página local; sem o plugin, a dica).
-    setHidden(this.msgSec.el, this.composer.render(live, this.id) === 'off');
+    const isCeo = this.id === 'ceo:inok';
+    setHidden(this.msgSec.el, isCeo || this.composer.render(live, this.id) === 'off');
 
     // Vida social (personalidade, carteira, rodas): só de quem está no escritório.
-    if (live) this.social.render(a.id, now);
+    if (live && !isCeo) this.social.render(a.id, now);
     else setHidden(this.social.el, true);
 
     // Tarefas.
     const tp = taskProgress(a.tasks);
-    setHidden(this.tasksSec.el, a.tasks.length === 0);
+    setHidden(this.tasksSec.el, isCeo || a.tasks.length === 0);
     updateProgress(this.tasksBar, tp.completed, tp.total, tp.inProgress);
     setText(this.tasksSec.extra, `${tp.completed}/${tp.total}`);
     this.tasks.sync(a.tasks);
 
     // Equipe: subagentes (principal) ou responsável (sub).
-    if (a.kind === 'main') {
+    if (isCeo) {
+      setHidden(this.teamSec.el, true);
+    } else if (a.kind === 'main') {
       const subs = sortByUrgency((this.ctx.store.snapshot?.agents ?? []).filter((s) => s.parentId === a.id));
       setText(this.teamSec.title, tr('Subagentes'));
       setText(this.teamSec.extra, subs.length ? String(subs.length) : '');
@@ -651,17 +665,24 @@ class AgentView {
     }
 
     // Linha do tempo (mais recente primeiro). No replay, nada depois do instante reproduzido.
-    const until = this.historyUntil();
-    this.history = mergeHistory(this.history, a.recent, 200, until);
-    const items = this.history.slice(-this.timelineShown).reverse();
-    const hiddenCount = Math.max(0, this.history.length - this.timelineShown);
-    setHidden(this.timelineMore, hiddenCount === 0);
-    setText(this.timelineMore, tr('Mostrar mais {0}', [Math.min(TIMELINE_STEP, hiddenCount)]));
-    setHidden(this.timelineLess, this.timelineShown <= TIMELINE_STEP || this.history.length <= TIMELINE_STEP);
-    this.timeline.sync(items);
-    setText(this.timelineSec.extra, this.history.length ? String(this.history.length) : '');
+    if (isCeo) {
+      setHidden(this.timelineSec.el, true);
+      setHidden(this.statsSec.el, true);
+    } else {
+      setHidden(this.timelineSec.el, false);
+      setHidden(this.statsSec.el, false);
+      const until = this.historyUntil();
+      this.history = mergeHistory(this.history, a.recent, 200, until);
+      const items = this.history.slice(-this.timelineShown).reverse();
+      const hiddenCount = Math.max(0, this.history.length - this.timelineShown);
+      setHidden(this.timelineMore, hiddenCount === 0);
+      setText(this.timelineMore, tr('Mostrar mais {0}', [Math.min(TIMELINE_STEP, hiddenCount)]));
+      setHidden(this.timelineLess, this.timelineShown <= TIMELINE_STEP || this.history.length <= TIMELINE_STEP);
+      this.timeline.sync(items);
+      setText(this.timelineSec.extra, this.history.length ? String(this.history.length) : '');
 
-    this.renderStats(a, now);
+      this.renderStats(a, now);
+    }
 
     // Codex: como ter o ao vivo e as aprovações por aqui (o servidor ainda não diz se os hooks dele estão ligados).
     setHidden(this.codexHint, !codex || a.kind !== 'main' || !live || this.ctx.store.replaying);
@@ -1020,7 +1041,7 @@ export class Drawer implements UiComponent {
     if (sel?.type === 'agent') {
       if (this.agentView.agentId !== sel.id) this.body.scrollTop = 0;
       this.agentView.open(sel.id);
-      setText(this.heading, this.ctx.agent(sel.id)?.kind === 'sub' ? tr('Subagente') : tr('Agente'));
+      setText(this.heading, sel.id === 'ceo:inok' ? tr('CEO') : this.ctx.agent(sel.id)?.kind === 'sub' ? tr('Subagente') : tr('Agente'));
       this.agentView.render();
     } else if (sel?.type === 'room') {
       if (this.roomView.roomId !== sel.id) this.body.scrollTop = 0;
