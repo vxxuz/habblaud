@@ -374,7 +374,12 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
       }
       // seleção de quem já foi embora
       if (selection?.type === 'agent' && !sim.person(selection.id)) setSelection(null);
-      if (selection?.type === 'room' && !sim.rooms.has(selection.id)) setSelection(null);
+      if (selection?.type === 'room') {
+        const roomId = selection.id;
+        if (!sim.rooms.has(roomId) && !sim.building.core.some((a) => a.id === roomId)) {
+          setSelection(null);
+        }
+      }
     } catch (err) {
       console.error('[mundo] erro no frame', err);
     }
