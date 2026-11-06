@@ -57,6 +57,10 @@ export interface ApiDeps {
    */
   ceo?: (req: IncomingMessage, res: ServerResponse, path: string) => void;
   /**
+   * Rotas de controle e monitoramento da Sala de Servidores MCP (/api/mcp/*).
+   */
+  mcp?: (req: IncomingMessage, res: ServerResponse, url: URL) => void;
+  /**
    * Terminal interativo e ações nos agentes (/api/pty/*, POST /api/agents/:id/stop|takeover; http/pty.ts).
    * Ausente = desligado (sem HABBLAUD_PTY=1, Docker, sem node-pty ou sem bind local).
    */
@@ -466,6 +470,14 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
         sendJson(res, 503, { error: tr('serviço do CEO desligado') });
       } else {
         deps.ceo(req, res, path);
+      }
+      return true;
+    }
+    if (path === '/api/mcp' || path.startsWith('/api/mcp/')) {
+      if (!deps.mcp) {
+        sendJson(res, 503, { error: 'MCP Server Room service is disabled' });
+      } else {
+        deps.mcp(req, res, url);
       }
       return true;
     }

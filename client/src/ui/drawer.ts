@@ -45,6 +45,7 @@ import { canRenameRoom } from './roomrename';
 import { accountChipLabel, accountProvider, CODEX_LIVE_HINT, codexApprovalLabel, providerOf } from './provider';
 import { ptyControllable } from './ptyapi';
 import { createAgentRow, updateAgentRow } from './rows';
+import { MCP_SERVER_ROOM_ID, McpServerView } from './mcp-panel';
 import { SocialSection } from './social';
 import { TERMINAL_UNAVAILABLE_HINT, type TerminalControl } from './terminal';
 import { Movable } from './movable';
@@ -1014,7 +1015,8 @@ export class Drawer implements UiComponent {
   private body: HTMLElement;
   private agentView: AgentView;
   private roomView: RoomView;
-  private mode: 'agent' | 'room' | null = null;
+  private mcpView: McpServerView;
+  private mode: 'agent' | 'room' | 'mcp' | null = null;
   private heading: HTMLElement;
   private movable: Movable;
   /** Avisado quando a gaveta é solta ou volta ao lugar (a área livre do escritório muda). */
@@ -1027,6 +1029,7 @@ export class Drawer implements UiComponent {
   ) {
     this.agentView = new AgentView(ctx, terminal, pty);
     this.roomView = new RoomView(ctx, pty);
+    this.mcpView = new McpServerView(ctx);
     this.heading = h('span', { class: 'ui-drawer__kind' });
     const close = iconButton(ICONS.close, tr('Fechar detalhes (Esc)'), () => ctx.select(null));
     this.body = h('div', { class: 'ui-drawer__body' });
@@ -1057,22 +1060,28 @@ export class Drawer implements UiComponent {
 
   render(): void {
     const sel = this.ctx.selection();
-    const mode = sel?.type ?? null;
+    const mode = sel?.type === 'room' && sel.id === MCP_SERVER_ROOM_ID ? 'mcp' : (sel?.type ?? null);
     if (mode !== this.mode) {
       // Gaveta fechada ou fora do agente: o editor fecha, e ao reabrir começa do estado atual do agente.
       if (this.mode === 'agent') this.agentView.character.close();
       this.mode = mode;
-      this.body.replaceChildren(...(mode === 'agent' ? [this.agentView.el] : mode === 'room' ? [this.roomView.el] : []));
+      this.body.replaceChildren(
+        ...(mode === 'agent' ? [this.agentView.el] : mode === 'mcp' ? [this.mcpView.el] : mode === 'room' ? [this.roomView.el] : []),
+      );
       this.body.scrollTop = 0;
       this.el.classList.toggle('is-open', mode !== null);
       setAttr(this.el, 'aria-hidden', mode ? 'false' : 'true');
       this.el.inert = mode === null;
+      if (mode === 'mcp') this.mcpView.open();
     }
     if (sel?.type === 'agent') {
       if (this.agentView.agentId !== sel.id) this.body.scrollTop = 0;
       this.agentView.open(sel.id);
       setText(this.heading, sel.id === 'ceo:inok' ? tr('CEO') : this.ctx.agent(sel.id)?.kind === 'sub' ? tr('Subagente') : tr('Agente'));
       this.agentView.render();
+    } else if (mode === 'mcp') {
+      setText(this.heading, 'MCP Server Room');
+      this.mcpView.render();
     } else if (sel?.type === 'room') {
       if (this.roomView.roomId !== sel.id) this.body.scrollTop = 0;
       this.roomView.open(sel.id);

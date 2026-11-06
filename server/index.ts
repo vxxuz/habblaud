@@ -41,6 +41,8 @@ import { discoverCodexDirs } from './sources/codex/accounts';
 import { CodexHistory } from './sources/codex/history';
 import { CodexSource } from './sources/codex/source';
 import { createCeoRoutes } from './ceo/routes';
+import { createMcpRoutes } from './mcp/routes';
+import { McpControlService } from './mcp/service';
 import { ArtifactScanner } from './sources/antigravity/artifacts';
 import { AntigravitySource } from './sources/antigravity/source';
 import { getAntigravityHome } from './sources/antigravity/detector';
@@ -331,6 +333,8 @@ const messages = config.messages
   : undefined;
 late.messages = messages;
 const ceoRoutes = createCeoRoutes({ scanner: ceoScanner, office, messages, antigravityDir });
+const mcpService = new McpControlService({ office, home: config.home });
+const mcpRoutes = createMcpRoutes(mcpService);
 
 // Terminal interativo (abrir/assumir sessões e encerrar agentes): opt-in com HABBLAUD_PTY=1 (ou agy detectado), só com bind local, fora
 // do Docker, com node-pty e o executável do claude ou agy no PATH.
@@ -424,6 +428,7 @@ const api = createApiHandler({
   permissions: permissions ? createPermissionRoutes(permissions) : undefined,
   messages: messages ? createMessageRoutes(messages) : undefined,
   ceo: ceoRoutes,
+  mcp: mcpRoutes,
   pty: ptys ? createPtyRoutes(ptys, { allowLan: true }) : undefined,
   spawn,
   attachments,

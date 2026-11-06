@@ -263,7 +263,7 @@ export function layoutCeoSuite(): AreaLayout {
 
   b.wall('painting', 5, undefined, { order: 0.5 });
   b.wall('clock', 8, undefined, { order: 0.6 });
-  b.wall('sign', 10, undefined, { order: 0.7 });
+  b.area.signId = b.wall('sign', 10, undefined, { order: 0.7 });
 
   b.furn('bookshelf', 1, 2, undefined, { order: 0.2 });
   b.furn('binder_shelf', 3, 2, undefined, { order: 0.21 });
@@ -289,9 +289,11 @@ export function layoutCeoSuite(): AreaLayout {
 export function layoutBoardroom(): AreaLayout {
   const b = new AreaBuilder(BOARDROOM_ID, 'boardroom', { x: COL_W * 2, y: SOUTH_Y, w: COL_W, h: ROOM_H });
   const wall = CORE_WALLS.lounge;
-  b.floor('marble', 0, 0, 16, 12, 701);
-  b.rug(2.5, 3.5, 11, 5.5, '#2e3a4e', 702);
-  b.face(0.5, 15, wall);
+  b.floor('concrete', 0, 0, 16, 12, 701);
+  b.rug(1.5, 3.5, 5, 5, '#1e293b', 702);
+  b.rug(9.5, 3.5, 5, 5, '#1e293b', 703);
+  b.face(0.5, 15, wall, [{ lx: 7, w: 2 }]);
+  b.wall('door_frame', 8, undefined, { order: 0.05 });
   b.south(0.5, 15, 11, { ...wall, exterior: true });
   b.cap(0, 0, 0.5, 12, wall);
   b.cap(15.5, 0, 0.5, 12, wall);
@@ -299,20 +301,39 @@ export function layoutBoardroom(): AreaLayout {
   b.walk(7, 0, 2, 2);
   b.area.door = { x: COL_W * 2 + 7, y: SOUTH_Y, w: 2, h: 2 };
 
-  b.wall('whiteboard', 6.5, undefined, { order: 0.4 });
-  b.wall('tv', 11.5, undefined, { order: 0.4 });
+  b.wall('tv', 4, undefined, { order: 0.4 });
+  b.wall('clock', 6, undefined, { order: 0.5 });
+  b.area.signId = b.wall('sign', 11.5, undefined, { order: 0.9 });
 
-  b.furn('meeting_table', 6, 5, undefined, { order: 0.4 });
-  b.seat('office_chair', 'office_chair', 6, 4, 'down', 'blue', { order: 0.35 });
-  b.seat('office_chair', 'office_chair', 8, 4, 'down', 'blue', { order: 0.35 });
-  b.seat('office_chair', 'office_chair', 6, 7, 'up', 'blue', { order: 0.45 });
-  b.seat('office_chair', 'office_chair', 8, 7, 'up', 'blue', { order: 0.45 });
+  // North wall patch cabinets
+  b.furn('filing_cabinet', 1, 2, undefined, { order: 0.25 });
+  b.furn('filing_cabinet', 2, 2, undefined, { order: 0.26 });
+  b.furn('filing_cabinet', 14, 2, undefined, { order: 0.27 });
 
-  b.furn('plant_tall', 1, 3, 'palm', { order: 0.3 });
-  b.furn('water_cooler', 14, 3, undefined, { order: 0.3 });
-  b.spot('water', 14, 4, 'up', { dy: -3 });
-  b.furn('plant_small', 1, 9, 'fern', { order: 0.5 });
-  b.furn('plant_tall', 14, 9, 'ficus', { order: 0.5 });
+  // Server Rack Row 1 (codebase-memory-mcp & habblaud-mcp cluster)
+  b.furn('binder_shelf', 2, 4, undefined, { order: 0.35 });
+  b.furn('arcade', 3, 4, undefined, { order: 0.36 });
+  b.furn('arcade', 4, 4, undefined, { order: 0.37 });
+  b.furn('binder_shelf', 5, 4, undefined, { order: 0.38 });
+
+  b.furn('binder_shelf', 10, 4, undefined, { order: 0.35 });
+  b.furn('arcade', 11, 4, undefined, { order: 0.36 });
+  b.furn('arcade', 12, 4, undefined, { order: 0.37 });
+  b.furn('binder_shelf', 13, 4, undefined, { order: 0.38 });
+
+  // Server Rack Row 2 + Operator Terminal Console
+  b.furn('filing_cabinet', 2, 7, undefined, { order: 0.45 });
+  b.furn('arcade', 3, 7, undefined, { order: 0.46 });
+  b.furn('arcade', 4, 7, undefined, { order: 0.47 });
+  b.furn('filing_cabinet', 5, 7, undefined, { order: 0.48 });
+
+  const desk = b.furn('desk', 10, 7, 'dark', { order: 0.45 });
+  b.seat('desk', 'office_chair', 10, 8, 'up', 'black', { dx: TILE / 2, deskId: desk, order: 0.5 });
+  b.furn('filing_cabinet', 12, 7, undefined, { order: 0.46 });
+  b.furn('printer', 13, 7, undefined, { order: 0.47 });
+
+  b.furn('plant_small', 1, 9, 'succulent', { order: 0.5 });
+  b.furn('plant_small', 14, 9, 'fern', { order: 0.5 });
 
   return b.build();
 }

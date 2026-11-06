@@ -51,6 +51,8 @@ const CORE_NAMES: Record<string, string> = {
   'core:banheiros': tr('Banheiros'),
   'core:copa': tr('Copa'),
   'core:lounge': tr('Lounge'),
+  'core:ceo': 'CEO Suite',
+  'core:boardroom': 'MCP Server Room',
 };
 
 /** 'shell' = espera de shell: balão escuro de terminal com texto verde. 'say' = fala das rodas (papo, torcida, apostas). */
@@ -295,14 +297,16 @@ export class Overlay {
     // ---- seleção de sala
     if (sel.room) {
       const room = this.sim.rooms.get(sel.room);
-      if (room && room.present) {
-        const r = room.layout.rect;
+      const coreArea = !room && sel.room === 'core:boardroom' ? this.sim.layout.core.find((a) => a.id === sel.room) : undefined;
+      const r = room && room.present ? room.layout.rect : coreArea?.rect;
+      const accent = room ? room.theme.accent : '#38bdf8';
+      if (r) {
         const ax = this.sx(r.x * TILE);
         const ay = this.sy(r.y * TILE);
         const bx = this.sx((r.x + r.w) * TILE);
         const by = this.sy((r.y + r.h) * TILE);
         ctx.save();
-        ctx.strokeStyle = room.theme.accent;
+        ctx.strokeStyle = accent;
         ctx.lineWidth = 2.5;
         ctx.globalAlpha = 0.85 + Math.sin(now / 300) * 0.15;
         ctx.beginPath();
@@ -503,7 +507,15 @@ export class Overlay {
       const anim = room ? buildAnim(room.phase, room.progress(now)) : null;
       // texto da placa quando ela fica grande o bastante para ler; senão, o nome flutuante
       const rect = this.renderer.signRect(vis);
-      const text = room ? room.info.name : vis.id === 'core:recepcao' ? 'Habblaud' : null;
+      const text = room
+        ? room.info.name
+        : vis.id === 'core:recepcao'
+          ? 'Habblaud'
+          : vis.id === 'core:ceo'
+            ? 'CEO'
+            : vis.id === 'core:boardroom'
+              ? 'MCP SERVER'
+              : null;
       const readable = !!rect && rect.h * zoom >= SIGN_MIN_PX;
       if (readable && rect && text && (!anim || anim.sign >= 1)) {
         const ax = this.sx(rect.x);

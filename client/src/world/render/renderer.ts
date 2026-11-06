@@ -783,10 +783,14 @@ export class Renderer {
       } else if (f.kind === 'coffee_machine' && state === 1) {
         this.drawSteam(f.ax, dy + 2, now, f.seed);
       } else if (f.kind === 'arcade' && s.rects?.screen) {
-        // duelo no fliperama: as duas máquinas mostram a partida
-        const seed = this.sim.social.arcadeSeed();
         const r = s.rects.screen;
-        if (seed !== null) this.safe(() => this.art.drawScreen(ctx, { x: dx + r.x, y: dy + r.y, w: r.w, h: r.h }, 'game', now, seed));
+        if (area.id === 'core:boardroom') {
+          this.safe(() => this.art.drawScreen(ctx, { x: dx + r.x, y: dy + r.y, w: r.w, h: r.h }, 'terminal', now, f.seed));
+        } else {
+          // duelo no fliperama: as duas máquinas mostram a partida
+          const seed = this.sim.social.arcadeSeed();
+          if (seed !== null) this.safe(() => this.art.drawScreen(ctx, { x: dx + r.x, y: dy + r.y, w: r.w, h: r.h }, 'game', now, seed));
+        }
       }
     }
     if (scaled) ctx.restore();
@@ -794,6 +798,7 @@ export class Renderer {
 
   /** Tela do monitor: segue a atividade de quem senta ali. */
   deskScreen(f: FurnVis, area: AreaVis): ScreenMode {
+    if (area.id === 'core:boardroom') return 'code';
     const room = area.room;
     if (room && room.light(this.sim.now) < 0.3) return 'off';
     const owner = f.seatSpot ? this.sim.spots.ownerOf(f.seatSpot) : undefined;

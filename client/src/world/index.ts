@@ -163,10 +163,11 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
 
   const focusRoom = (id: string) => {
     const room = sim.rooms.get(id);
-    if (!room) return;
+    const coreArea = room ? undefined : sim.layout.core.find((a) => a.id === id);
+    const r = room ? room.layout.rect : coreArea?.rect;
+    if (!r) return;
     userMoved = true;
     camera.follow = null;
-    const r = room.layout.rect;
     const rect = { x: r.x * TILE, y: r.y * TILE - 8, w: r.w * TILE, h: r.h * TILE + 16 };
     const fit = camera.fitZoom(rect, 40);
     const zoom = Math.min(4, Math.max(camera.minZoom, camera.snapZoom(fit, 'down')));
@@ -198,6 +199,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     const tx = Math.floor(w.x / TILE);
     const ty = Math.floor(w.y / TILE);
     for (const room of sim.rooms.values()) if (room.present && !room.ghost && inRect(room.layout.rect, tx, ty)) return { type: 'room', id: room.id };
+    for (const area of sim.layout.core) if (area.id === 'core:boardroom' && inRect(area.rect, tx, ty)) return { type: 'room', id: area.id };
     return null;
   };
 

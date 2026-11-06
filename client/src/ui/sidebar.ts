@@ -10,6 +10,7 @@ import { ICONS } from './icons';
 import { groupRooms, type AgentNode, type RoomGroup } from './model';
 import { officeIsEmpty } from './overlays';
 import { createAgentRow, updateAgentRow } from './rows';
+import { MCP_SERVER_ROOM_ID } from './mcp-panel';
 import { createAccountChip, createProgress, updateAccountChip, updateProgress } from './widgets';
 import { tr } from '../../../shared/i18n';
 
@@ -104,8 +105,30 @@ export class Sidebar implements UiComponent {
     });
 
     this.scroller = h('div', { class: 'ui-side__scroll' });
+    const mcpRoomBtn = h(
+      'button',
+      {
+        class: 'ui-room__head',
+        type: 'button',
+        attrs: {
+          style: 'width: 100%; margin-bottom: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.28); display: flex; align-items: center; justify-content: space-between; cursor: pointer;',
+        },
+        on: {
+          click: () => {
+            this.ctx.select({ type: 'room', id: MCP_SERVER_ROOM_ID }, { focus: true });
+          },
+        },
+      },
+      h(
+        'span',
+        { attrs: { style: 'display: flex; align-items: center; gap: 8px;' } },
+        h('span', { class: 'ui-room-swatch', attrs: { style: '--room: #38bdf8' } }),
+        h('strong', { class: 'ui-room__name', text: '🔌 MCP Server Room' }),
+      ),
+      h('span', { class: 'ui-room__count', text: 'MCP' }),
+    );
     const list = h('div', { class: 'ui-rooms', role: 'list', attrs: { 'aria-label': tr('Salas') } });
-    this.scroller.append(list);
+    this.scroller.append(mcpRoomBtn, list);
     this.rooms = new KeyedList<RoomGroup>(list, {
       key: (g) => g.room.id,
       create: (g) => this.createRoom(g),
