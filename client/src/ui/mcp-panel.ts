@@ -402,6 +402,7 @@ export class McpServerView {
         this.data.codebaseMemory.projects = body.projects;
         this.renderData();
       }
+      window.dispatchEvent(new CustomEvent('habblaud:mcp-updated'));
     } catch (err) {
       setText(this.indexOutput, `Error: ${(err as Error).message}`);
     } finally {

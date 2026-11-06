@@ -201,13 +201,78 @@ export class Overlay {
   private ox = 0;
   private oy = 0;
   private zoom = 1;
+  /** Live telemetry for the MCP Server Room (codebase-memory-mcp & habblaud-mcp) drawn on canvas. */
+  private mcpHud: {
+    lastFetchAt: number;
+    fetching: boolean;
+    cbmOnline: boolean;
+    cbmTools: number;
+    habblaudOnline: boolean;
+    habblaudTools: number;
+    projects: { name: string; rootPath: string; branch: string }[];
+    recentActivity: { agentName: string; text: string; at: number }[];
+  } = {
+    lastFetchAt: 0,
+    fetching: false,
+    cbmOnline: true,
+    cbmTools: 17,
+    habblaudOnline: true,
+    habblaudTools: 3,
+    projects: [],
+    recentActivity: [],
+  };
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
     private readonly sim: Sim,
     private readonly renderer: Renderer,
     private readonly camera: Camera,
-  ) {}
+  ) {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('habblaud:mcp-updated', () => {
+        this.mcpHud.lastFetchAt = 0;
+        this.pollMcpHud(performance.now());
+      });
+    }
+  }
+
+  private pollMcpHud(now: number): void {
+    if (this.mcpHud.fetching) return;
+    if (this.mcpHud.lastFetchAt > 0 && now - this.mcpHud.lastFetchAt < 10_000) return;
+    if (typeof window === 'undefined' || typeof fetch !== 'function') return;
+    this.mcpHud.fetching = true;
+    this.mcpHud.lastFetchAt = now;
+    fetch('/api/mcp/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data || typeof data !== 'object') return;
+        const servers = Array.isArray(data.servers) ? data.servers : [];
+        const cbm = servers.find((s: { name?: string }) => s.name === 'codebase-memory-mcp');
+        const hab = servers.find((s: { name?: string }) => s.name === 'habblaud-mcp');
+        if (cbm) {
+          this.mcpHud.cbmOnline = !!cbm.installed;
+          this.mcpHud.cbmTools = Number(cbm.toolCount) || 17;
+        }
+        if (hab) {
+          this.mcpHud.habblaudOnline = !!hab.installed;
+          this.mcpHud.habblaudTools = Number(hab.toolCount) || 3;
+        }
+        const projects = data.codebaseMemory?.projects ?? data.projects;
+        if (Array.isArray(projects)) {
+          this.mcpHud.projects = projects;
+        }
+        if (typeof data.codebaseMemory?.available === 'boolean') {
+          this.mcpHud.cbmOnline = data.codebaseMemory.available;
+        }
+        if (Array.isArray(data.recentActivity)) {
+          this.mcpHud.recentActivity = data.recentActivity;
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        this.mcpHud.fetching = false;
+      });
+  }
 
   /** Descarta medições (ex.: depois que uma fonte carregou). */
   resetCaches(): void {
@@ -297,7 +362,7 @@ export class Overlay {
     // ---- seleção de sala
     if (sel.room) {
       const room = this.sim.rooms.get(sel.room);
-      const coreArea = !room && sel.room === 'core:boardroom' ? this.sim.layout.core.find((a) => a.id === sel.room) : undefined;
+      const coreArea = !room && sel.room === 'core:boardroom' ? this.sim.building.core.find((a) => a.id === sel.room) : undefined;
       const r = room && room.present ? room.layout.rect : coreArea?.rect;
       const accent = room ? room.theme.accent : '#38bdf8';
       if (r) {
@@ -316,8 +381,11 @@ export class Overlay {
       }
     }
 
+    this.pollMcpHud(now);
+
     // placas e pílulas primeiro: são fixas e grandes; balões e etiquetas desviam delas
     this.drawRoomTexts(now, zoom);
+    this.drawMcpServerHud(now, zoom, sel.room === 'core:boardroom');
     this.drawFxBanners(now, zoom);
 
     // ---- coleta balões e etiquetas dos personagens visíveis
@@ -535,10 +603,188 @@ export class Overlay {
         // endereço antigo de uma mudança: o nome já está na sala nova
         if (!room.present || room.ghost || (anim && anim.walls < 0.6)) continue;
         this.drawRoomPill(room.info.name, cx, cy, colW - 8, room.accounts, this.countIn(room.id), room.theme.accent, room.lightOn);
+      } else if (vis.id === 'core:boardroom') {
+        const projCount = this.mcpHud.projects.length;
+        const label = projCount > 0 ? `MCP: codebase-memory (${projCount})` : 'MCP: codebase-memory';
+        this.drawRoomPill(label, cx, cy, colW - 8, [], projCount, '#38bdf8', true);
       } else if (CORE_NAMES[vis.id]) {
         this.drawCorePill(CORE_NAMES[vis.id], cx, cy, colW - 8);
       }
     }
+  }
+
+  /**
+   * Live HUD badges & telemetry cards drawn directly on the canvas inside the MCP Server Room (`core:boardroom`).
+   * Displays `codebase-memory-mcp` status, indexed repositories, `habblaud-mcp`, and live JSON-RPC activity over the racks.
+   */
+  private drawMcpServerHud(now: number, zoom: number, selected: boolean): void {
+    if (zoom < TINY_ZOOM) return;
+    const vis = this.renderer.areas.get('core:boardroom');
+    if (!vis) return;
+    const r = vis.layout.rect;
+    const vw = this.camera.viewW;
+    const vh = this.camera.viewH;
+    const roomLeft = this.sx(r.x * TILE);
+    const roomRight = this.sx((r.x + r.w) * TILE);
+    const roomTop = this.sy(r.y * TILE);
+    const roomBottom = this.sy((r.y + r.h) * TILE);
+    if (roomRight < -40 || roomLeft > vw + 40 || roomBottom < -40 || roomTop > vh + 40) return;
+
+    const halfColW = Math.max(88, ((r.w * TILE * zoom) / 2) - 8);
+    const pulse = 0.65 + 0.35 * Math.sin(now / 380);
+    const projCount = this.mcpHud.projects.length;
+
+    // 1. West Server Rack Cluster (lx = 3.5, ly = 3.6): codebase-memory-mcp
+    const westX = this.sx((r.x + 3.8) * TILE);
+    const row1Y = this.sy((r.y + 3.6) * TILE);
+    const cbmSub =
+      zoom >= 0.85
+        ? `${projCount} indexed repo${projCount === 1 ? '' : 's'} · ${this.mcpHud.cbmTools} tools`
+        : undefined;
+    this.drawMcpRackCard(
+      westX,
+      row1Y,
+      halfColW,
+      'codebase-memory-mcp',
+      cbmSub,
+      this.mcpHud.cbmOnline,
+      '#38bdf8',
+      pulse,
+      selected,
+    );
+
+    // 2. East Server Rack Cluster (lx = 11.8, ly = 3.6): habblaud-mcp
+    const eastX = this.sx((r.x + 11.8) * TILE);
+    const habSub = zoom >= 0.85 ? `${this.mcpHud.habblaudTools} tools · LAN :4747` : undefined;
+    this.drawMcpRackCard(
+      eastX,
+      row1Y,
+      halfColW,
+      'habblaud-mcp',
+      habSub,
+      this.mcpHud.habblaudOnline,
+      '#34d399',
+      pulse,
+      selected,
+    );
+
+    if (zoom < 0.85) return;
+
+    // 3. South-West Storage Rack (lx = 3.8, ly = 7.0): Indexed Repositories list on canvas
+    const row2Y = this.sy((r.y + 7.1) * TILE);
+    const repos = this.mcpHud.projects.slice(0, zoom >= 1.35 ? 3 : 2).map((p) => {
+      const short = p.name
+        .replace(/^home-[^-]+-Craft-Anything-/, '')
+        .replace(/^home-[^-]+-/, '');
+      return p.branch && p.branch !== '-' ? `${short} (${p.branch})` : short;
+    });
+    const extraCount = Math.max(0, projCount - repos.length);
+    const repoSub =
+      repos.length > 0
+        ? `${repos.join(' · ')}${extraCount > 0 ? ` +${extraCount}` : ''}`
+        : 'Click room to index repo';
+    this.drawMcpRackCard(
+      westX,
+      row2Y,
+      halfColW,
+      `Graph Index (${projCount})`,
+      repoSub,
+      projCount > 0,
+      '#a78bfa',
+      pulse,
+      selected,
+    );
+
+    // 4. South-East Operator Console (lx = 11.8, ly = 7.1): Live MCP Activity / Control prompt
+    const latest = this.mcpHud.recentActivity[0];
+    const consoleTitle = latest ? `⚡ ${latest.agentName}` : '⚡ MCP Console';
+    const consoleSub = latest ? latest.text : 'Click rack to search & index';
+    this.drawMcpRackCard(
+      eastX,
+      row2Y,
+      halfColW,
+      consoleTitle,
+      consoleSub,
+      true,
+      '#f59e0b',
+      pulse,
+      selected,
+    );
+  }
+
+  private drawMcpRackCard(
+    cx: number,
+    cy: number,
+    maxW: number,
+    title: string,
+    subtitle: string | undefined,
+    online: boolean,
+    accent: string,
+    pulse: number,
+    selected: boolean,
+  ): void {
+    const { ctx } = this;
+    const statusText = online ? 'ONLINE' : 'OFFLINE';
+    const statusW = this.measure(BADGE_FONT, statusText) + 8;
+    const titleFit = this.fit(CORE_FONT_SMALL, title, Math.max(40, maxW - statusW - 26));
+    const titleW = this.measure(CORE_FONT_SMALL, titleFit);
+    const subFit = subtitle ? this.fit(CHIP_FONT, subtitle, Math.max(40, maxW - 16)) : '';
+    const subW = subFit ? this.measure(CHIP_FONT, subFit) : 0;
+
+    const topRowW = 18 + titleW + 6 + statusW + 8;
+    const w = Math.round(Math.min(maxW, Math.max(topRowW, subW + 16)));
+    const h = subFit ? 28 : 17;
+    const x = Math.round(cx - w / 2);
+    const y = Math.round(cy - h / 2);
+
+    ctx.save();
+    // Card background
+    ctx.fillStyle = selected ? 'rgba(12, 20, 36, 0.94)' : 'rgba(15, 23, 42, 0.88)';
+    ctx.strokeStyle = selected ? accent : 'rgba(56, 189, 248, 0.35)';
+    ctx.lineWidth = selected ? 1.4 : 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 5);
+    ctx.fill();
+    ctx.stroke();
+
+    // Left accent bar
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(x, y, 3, h, [5, 0, 0, 5]);
+    ctx.fill();
+
+    // Pulsing status LED dot
+    const topY = subFit ? y + 9 : y + h / 2;
+    ctx.beginPath();
+    ctx.arc(x + 9, topY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = online ? `rgba(52, 211, 153, ${pulse.toFixed(2)})` : '#ef4444';
+    ctx.fill();
+
+    // Title
+    ctx.font = CORE_FONT_SMALL;
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillText(titleFit, x + 15, topY + 0.5);
+
+    // Status pill on the right
+    const badgeX = x + w - statusW - 5;
+    const badgeY = topY - 5;
+    ctx.fillStyle = online ? 'rgba(16, 185, 129, 0.22)' : 'rgba(239, 68, 68, 0.25)';
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, statusW, 10, 3);
+    ctx.fill();
+    ctx.font = BADGE_FONT;
+    ctx.fillStyle = online ? '#34d399' : '#fca5a5';
+    ctx.fillText(statusText, badgeX + 4, topY + 0.5);
+
+    // Subtitle row
+    if (subFit) {
+      ctx.font = CHIP_FONT;
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(subFit, x + 8, y + 21);
+    }
+
+    ctx.restore();
+    this.place(x, y, w, h);
   }
 
   /** Altura dos ícones sobre a cabeça, contando o balão "!" de quem viu o CI falhar (render/github-fx.ts). */
