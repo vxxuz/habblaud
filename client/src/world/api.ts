@@ -2,7 +2,7 @@
 // Implementação: client/src/world/index.ts -> createWorld().
 // Regra: mudanças aqui devem ser ADITIVAS.
 
-import type { AgentInfo } from '../../shared/types';
+import type { AgentInfo } from '../../../shared/types';
 
 export type Selection = { type: 'agent'; id: string } | { type: 'room'; id: string } | null;
 

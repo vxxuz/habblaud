@@ -827,7 +827,6 @@ describe('espera de shell', () => {
           agent('ana', '/a', 'waiting', {
             pendingArtifact: {
               id: 'art-1',
-              sessionId: 'sess-1',
               name: 'implementation-plan',
               summary: 'Plano de implementação',
               path: '/tmp/plan.md',

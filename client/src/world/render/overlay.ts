@@ -379,6 +379,24 @@ export class Overlay {
         ctx.stroke();
         ctx.restore();
       }
+    } else if (sel.hover === 'core:boardroom') {
+      const coreArea = this.sim.building.core.find((a) => a.id === 'core:boardroom');
+      const r = coreArea?.rect;
+      if (r) {
+        const ax = this.sx(r.x * TILE);
+        const ay = this.sy(r.y * TILE);
+        const bx = this.sx((r.x + r.w) * TILE);
+        const by = this.sy((r.y + r.h) * TILE);
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.globalAlpha = 0.6 + Math.sin(now / 200) * 0.2;
+        ctx.beginPath();
+        ctx.roundRect(ax - 2, ay - 2, bx - ax + 4, by - ay + 4, 6);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     this.pollMcpHud(now);

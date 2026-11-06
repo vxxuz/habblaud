@@ -163,7 +163,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
 
   const focusRoom = (id: string) => {
     const room = sim.rooms.get(id);
-    const coreArea = room ? undefined : sim.layout.core.find((a) => a.id === id);
+    const coreArea = room ? undefined : sim.building.core.find((a) => a.id === id);
     const r = room ? room.layout.rect : coreArea?.rect;
     if (!r) return;
     userMoved = true;
@@ -199,7 +199,13 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     const tx = Math.floor(w.x / TILE);
     const ty = Math.floor(w.y / TILE);
     for (const room of sim.rooms.values()) if (room.present && !room.ghost && inRect(room.layout.rect, tx, ty)) return { type: 'room', id: room.id };
-    for (const area of sim.layout.core) if (area.id === 'core:boardroom' && inRect(area.rect, tx, ty)) return { type: 'room', id: area.id };
+    for (const area of sim.building.core) {
+      if (area.id === 'core:boardroom') {
+        if (tx >= area.rect.x && tx < area.rect.x + area.rect.w && ty >= area.rect.y - 1 && ty < area.rect.y + area.rect.h) {
+          return { type: 'room', id: area.id };
+        }
+      }
+    }
     return null;
   };
 
@@ -243,20 +249,14 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     ch.homeSpot = null;
     ch.roomId = targetRoomId;
     ch.info.roomId = targetRoomId;
-    ch.plan = [];
-    ch.path = [];
-    ch.moving = false;
-    ch.thinkIn = 0;
+    sim.interrupt(ch);
     for (const sub of sim.chars.values()) {
       if (sub.info.parentId === agentId && !sub.leaving) {
         if (sub.homeSpot) sim.spots.release(sub.homeSpot, sub.id);
         sub.homeSpot = null;
         sub.roomId = targetRoomId;
         sub.info.roomId = targetRoomId;
-        sub.plan = [];
-        sub.path = [];
-        sub.moving = false;
-        sub.thinkIn = 0;
+        sim.interrupt(sub);
       }
     }
     void fetch('/api/agents/move-room', {
@@ -370,7 +370,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
       if (soundCbs.size && !playback) cues.update(now, (c) => soundCbs.forEach((cb) => cb(c)));
       if (mouse) {
         const hit = pick(mouse.x, mouse.y);
-        setHover(hit?.type === 'agent' ? hit.id : null);
+        setHover(hit?.type === 'agent' ? hit.id : hit?.type === 'room' && hit.id === 'core:boardroom' ? 'core:boardroom' : null);
       }
       // seleção de quem já foi embora
       if (selection?.type === 'agent' && !sim.person(selection.id)) setSelection(null);

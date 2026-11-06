@@ -1,7 +1,8 @@
 import type { UiContext } from './context';
-import { h, iconButton, setHidden, setText } from './dom';
+import { copyText, h, iconButton, setAttr, setHidden, setText, setTitle } from './dom';
 import { relativeTime } from './format';
 import { ICONS } from './icons';
+import { createStatusDot } from './widgets';
 
 export interface McpToolSchema {
   name: string;
@@ -45,12 +46,47 @@ export interface McpStatusSnapshot {
 
 export const MCP_SERVER_ROOM_ID = 'core:boardroom';
 
+function copyButton(getText: () => string, label: string): HTMLButtonElement {
+  const b = iconButton(
+    ICONS.copy,
+    label,
+    async () => {
+      const ok = await copyText(getText());
+      b.classList.toggle('is-done', ok);
+      b.innerHTML = ok ? ICONS.check : ICONS.copy;
+      setTitle(b, ok ? 'Copied!' : 'Failed to copy');
+      setTimeout(() => {
+        b.classList.remove('is-done');
+        b.innerHTML = ICONS.copy;
+        setTitle(b, label);
+      }, 1400);
+    },
+    'ui-icon-btn--sm',
+  );
+  return b;
+}
+
+function section(title: string, ...children: (Node | null)[]): { el: HTMLElement; title: HTMLElement; extra: HTMLElement } {
+  const t = h('h3', { class: 'ui-sec__title', text: title });
+  const extra = h('span', { class: 'ui-sec__extra' });
+  const el = h(
+    'section',
+    { class: 'ui-sec' },
+    h('div', { class: 'ui-sec__head' }, t, extra),
+    ...children.filter((c): c is Node => !!c),
+  );
+  return { el, title: t, extra };
+}
+
 export class McpServerView {
   readonly el: HTMLElement;
   private statusMsg: HTMLElement;
+  private statusDot: HTMLElement;
+  private statusText: HTMLElement;
+  private statusSince: HTMLElement;
   private serversWrap: HTMLElement;
-  private serversCount: HTMLElement;
-  private cbmStatusBadge: HTMLElement;
+  private serversSec: ReturnType<typeof section>;
+  private cbmSec: ReturnType<typeof section>;
   private projectsWrap: HTMLElement;
   private projectsCount: HTMLElement;
   private repoInput: HTMLInputElement;
@@ -62,43 +98,156 @@ export class McpServerView {
   private searchOutput: HTMLElement;
   private activityWrap: HTMLElement;
   private activityEmpty: HTMLElement;
+  private activitySec: ReturnType<typeof section>;
+  private specsSec: ReturnType<typeof section>;
+  private specsDl: HTMLElement;
   private loading = false;
   private data: McpStatusSnapshot | null = null;
   private lastFetchAt = 0;
 
   constructor(private ctx: UiContext) {
-    const swatch = h('span', { class: 'ui-room-swatch', attrs: { style: '--room: #38bdf8' } });
+    // 1. Hero Header (styled exactly like Agent detail hero)
+    const avatar = h(
+      'div',
+      {
+        class: 'ui-hero__avatar',
+        attrs: {
+          style:
+            'width: 48px; height: 48px; border-radius: 12px; background: radial-gradient(circle at 30% 30%, #1e293b, #0f172a); border: 2px solid #38bdf8; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 16px rgba(56, 189, 248, 0.35); position: relative; flex: none;',
+        },
+      },
+      h('span', { attrs: { style: 'font-size: 24px; user-select: none;' }, text: '🖥️' }),
+    );
+
     const title = h('h2', { class: 'ui-hero__name', text: 'MCP Server Room' });
-    const sub = h('span', { class: 'ui-mono ui-muted ui-small', text: '~/.gemini/config/mcp_config.json' });
+    const roleBadge = h('span', {
+      class: 'ui-role',
+      text: 'MCP HOST',
+      attrs: {
+        style:
+          'background: rgba(56, 189, 248, 0.16); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); font-weight: 700; padding: 2px 7px; border-radius: 4px;',
+      },
+    });
 
-    const refreshBtn = h('button', {
-      class: 'ui-btn ui-btn--sm',
-      type: 'button',
-      text: 'Refresh',
-      on: { click: () => void this.load(true) },
-    }) as HTMLButtonElement;
+    const cbmChip = h(
+      'span',
+      {
+        attrs: {
+          style:
+            'display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); font-weight: 600; font-size: 11px; color: #bae6fd;',
+        },
+      },
+      h('span', { attrs: { style: 'width: 6px; height: 6px; border-radius: 50%; background: #38bdf8;' } }),
+      h('span', { text: 'codebase-memory-mcp' }),
+    );
 
-    const centerBtn = iconButton(
-      ICONS.target,
-      'Center camera on MCP Server Room',
-      () => ctx.world.focusRoom(MCP_SERVER_ROOM_ID),
-      'ui-icon-btn--sm',
+    const habChip = h(
+      'span',
+      {
+        attrs: {
+          style:
+            'display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.25); font-weight: 600; font-size: 11px; color: #a7f3d0;',
+        },
+      },
+      h('span', { attrs: { style: 'width: 6px; height: 6px; border-radius: 50%; background: #34d399;' } }),
+      h('span', { text: 'habblaud-mcp' }),
+    );
+
+    const heroText = h(
+      'div',
+      { class: 'ui-hero__text' },
+      h('div', { class: 'ui-hero__line' }, title, roleBadge),
+      h('div', { class: 'ui-hero__acc', attrs: { style: 'flex-wrap: wrap; gap: 6px;' } }, cbmChip, habChip),
+      h(
+        'div',
+        { class: 'ui-hero__where' },
+        h('span', { class: 'ui-muted', text: 'Room' }),
+        h(
+          'button',
+          {
+            class: 'ui-room-link',
+            type: 'button',
+            attrs: { style: 'color: #38bdf8;' },
+            on: { click: () => ctx.world.focusRoom(MCP_SERVER_ROOM_ID) },
+          },
+          'MCP Server Room (South Wing · Col 2)',
+        ),
+      ),
+    );
+
+    const heroTitle = h(
+      'p',
+      { class: 'ui-hero__title' },
+      'Local Model Context Protocol host connecting codebase knowledge graphs and Habblaud management tools. Agents use these servers for graph searches, symbol lookups, and automation.',
+    );
+
+    // 2. Status Row (styled exactly like Agent detail status row)
+    this.statusDot = createStatusDot();
+    this.statusDot.classList.add('is-working');
+    this.statusText = h('span', { class: 'ui-status__text', text: 'ONLINE' });
+    this.statusSince = h('span', { class: 'ui-status__since', text: 'Port 4747' });
+
+    const refreshBtn = h(
+      'button',
+      {
+        class: 'ui-btn',
+        type: 'button',
+        title: 'Refresh MCP servers and projects',
+        on: { click: () => void this.load(true) },
+      },
+      h('span', { text: 'Refresh' }),
+    ) as HTMLButtonElement;
+
+    const centerBtn = h(
+      'button',
+      {
+        class: 'ui-btn',
+        type: 'button',
+        title: 'Center camera on MCP Server Room',
+        on: { click: () => ctx.world.focusRoom(MCP_SERVER_ROOM_ID) },
+      },
+      h('span', { attrs: { 'aria-hidden': 'true' } }),
+      h('span', { text: 'Centralize' }),
+    );
+    (centerBtn.firstChild as HTMLElement).innerHTML = ICONS.center;
+
+    const statusRow = h(
+      'div',
+      { class: 'ui-status' },
+      h('span', { class: 'ui-status__label' }, this.statusDot, this.statusText, this.statusSince),
+      h('span', { class: 'ui-status__actions' }, refreshBtn, centerBtn),
+    );
+
+    // 3. Action Terminal CTA (styled exactly like Agent's "Abrir terminal")
+    const termIcon = h('span', { class: 'ui-term-cta__icon', attrs: { 'aria-hidden': 'true' } });
+    termIcon.innerHTML = ICONS.terminal;
+    const termLabel = h('span', { class: 'ui-term-cta__label', text: 'Graph Symbol Search (search_graph)' });
+    const termRo = h('span', { class: 'ui-term-cta__ro', text: 'live' });
+    const termBtn = h(
+      'button',
+      {
+        class: 'ui-btn ui-term-cta',
+        type: 'button',
+        on: {
+          click: () => {
+            this.searchInput.focus();
+            this.searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          },
+        },
+      },
+      termIcon,
+      termLabel,
+      termRo,
+      h('kbd', { class: 'ui-kbd', text: 'Q', attrs: { 'aria-hidden': 'true' } }),
     );
 
     this.statusMsg = h('p', { class: 'ui-muted ui-small', hidden: true });
 
-    // 1. Connected MCP Servers section
-    this.serversCount = h('span', { class: 'ui-sec__extra', text: '0' });
+    // 4. Section: Connected MCP Servers
     this.serversWrap = h('div', { class: 'ui-mcp-servers' });
-    const serversSec = h(
-      'section',
-      { class: 'ui-sec' },
-      h('header', { class: 'ui-sec__head' }, h('h3', { class: 'ui-sec__title', text: 'Connected MCP Servers' }), this.serversCount),
-      this.serversWrap,
-    );
+    this.serversSec = section('Connected MCP Servers', this.serversWrap);
 
-    // 2. Codebase Memory Graph section
-    this.cbmStatusBadge = h('span', { class: 'ui-sec__extra', text: 'checking…' });
+    // 5. Section: Codebase Memory Graph
     this.projectsCount = h('span', { class: 'ui-muted ui-small' });
     this.projectsWrap = h('div', { class: 'ui-mcp-projects' });
 
@@ -108,26 +257,31 @@ export class McpServerView {
       attrs: {
         placeholder: '/home/inok/habblaud (path to index)',
         value: '/home/inok/habblaud',
-        style: 'width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: inherit; font-size: 12px;',
+        style:
+          'width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: inherit; font-size: 12px;',
       },
     });
+
     this.indexBtn = h('button', {
       class: 'ui-btn ui-btn--sm ui-btn--accent',
       type: 'button',
       text: 'Index Repo',
       on: { click: () => void this.runIndex(this.repoInput.value) },
     }) as HTMLButtonElement;
+
     this.indexOutput = h('pre', {
       class: 'ui-mono ui-small',
       hidden: true,
       attrs: {
-        style: 'margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.35); max-height: 140px; overflow: auto; white-space: pre-wrap; font-size: 11px;',
+        style:
+          'margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.35); max-height: 140px; overflow: auto; white-space: pre-wrap; font-size: 11px;',
       },
     });
 
     this.projectSelect = h('select', {
       attrs: {
-        style: 'width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: rgba(15,23,42,0.9); color: inherit; font-size: 12px; margin-bottom: 6px;',
+        style:
+          'width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: rgba(15,23,42,0.9); color: inherit; font-size: 12px; margin-bottom: 6px;',
       },
     }) as HTMLSelectElement;
 
@@ -135,9 +289,10 @@ export class McpServerView {
       class: 'ui-search__input',
       type: 'text',
       attrs: {
-        placeholder: 'Regex / symbol name (e.g. .*Office.* or .*Mcp.*)',
+        placeholder: 'Regex / symbol name (e.g. .*Mcp.* or .*Office.*)',
         value: '.*Mcp.*',
-        style: 'width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: inherit; font-size: 12px;',
+        style:
+          'width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: inherit; font-size: 12px;',
       },
     });
     this.searchInput.addEventListener('keydown', (e) => {
@@ -158,14 +313,13 @@ export class McpServerView {
       class: 'ui-mono ui-small',
       hidden: true,
       attrs: {
-        style: 'margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.35); max-height: 200px; overflow: auto; white-space: pre-wrap; font-size: 11px;',
+        style:
+          'margin-top: 6px; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.35); max-height: 200px; overflow: auto; white-space: pre-wrap; font-size: 11px;',
       },
     });
 
-    const cbmSec = h(
-      'section',
-      { class: 'ui-sec' },
-      h('header', { class: 'ui-sec__head' }, h('h3', { class: 'ui-sec__title', text: 'Codebase Memory Graph' }), this.cbmStatusBadge),
+    this.cbmSec = section(
+      'Codebase Memory Graph',
       this.projectsCount,
       this.projectsWrap,
       h(
@@ -178,43 +332,37 @@ export class McpServerView {
       h(
         'div',
         { attrs: { style: 'margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);' } },
-        h('div', { class: 'ui-small', text: 'Quick Graph Symbol Search (search_graph)', attrs: { style: 'font-weight: 600; margin-bottom: 6px;' } }),
+        h(
+          'div',
+          { class: 'ui-small', text: 'Quick Symbol Search (search_graph)', attrs: { style: 'font-weight: 600; margin-bottom: 6px;' } },
+        ),
         this.projectSelect,
         h('div', { attrs: { style: 'display: flex; gap: 6px; align-items: center;' } }, this.searchInput, this.searchBtn),
         this.searchOutput,
       ),
     );
 
-    // 3. Recent MCP Activity section
+    // 6. Section: Live MCP Tool Activity
     this.activityWrap = h('div', { class: 'ui-mcp-activity' });
     this.activityEmpty = h('p', { class: 'ui-muted ui-small', text: 'No recent MCP tool calls recorded yet.' });
-    const activitySec = h(
-      'section',
-      { class: 'ui-sec' },
-      h('header', { class: 'ui-sec__head' }, h('h3', { class: 'ui-sec__title', text: 'Live MCP Activity' })),
-      this.activityWrap,
-      this.activityEmpty,
-    );
+    this.activitySec = section('Live MCP Tool Activity', this.activityWrap, this.activityEmpty);
+
+    // 7. Section: Host Specifications (styled like Agent Stats KvList)
+    this.specsDl = h('dl', { class: 'ui-kv ui-stats' });
+    this.specsSec = section('Server Specifications & Host Info', this.specsDl);
 
     this.el = h(
       'div',
-      { class: 'ui-drawer__view ui-room-view' },
-      h(
-        'div',
-        { class: 'ui-room-hero' },
-        swatch,
-        h('div', { class: 'ui-hero__text' }, h('div', { class: 'ui-room-hero__title' }, title), sub),
-      ),
-      h(
-        'div',
-        { class: 'ui-status' },
-        h('span', { class: 'ui-small', text: '🔌 Antigravity MCP Hub' }),
-        h('span', { class: 'ui-status__actions' }, refreshBtn, centerBtn),
-      ),
+      { class: 'ui-drawer__view ui-agent-view ui-mcp-view' },
+      h('div', { class: 'ui-hero' }, avatar, heroText),
+      heroTitle,
+      statusRow,
+      termBtn,
       this.statusMsg,
-      serversSec,
-      cbmSec,
-      activitySec,
+      this.serversSec.el,
+      this.cbmSec.el,
+      this.activitySec.el,
+      this.specsSec.el,
     );
   }
 
@@ -256,8 +404,13 @@ export class McpServerView {
     const d = this.data;
     if (!d) return;
 
+    // Status row update
+    const onlineCount = d.servers.filter((s) => s.installed).length;
+    setText(this.statusText, `ONLINE · ${onlineCount} Server${onlineCount === 1 ? '' : 's'} Active`);
+    setText(this.statusSince, 'Port 4747 (LAN)');
+
     // 1. Render MCP servers
-    setText(this.serversCount, String(d.servers.length));
+    setText(this.serversSec.extra, `${d.servers.length} configured`);
     this.serversWrap.replaceChildren(
       ...d.servers.map((srv) => {
         const badge = h('span', {
@@ -271,7 +424,8 @@ export class McpServerView {
           'div',
           {
             attrs: {
-              style: 'padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px;',
+              style:
+                'padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px;',
             },
           },
           h(
@@ -280,7 +434,12 @@ export class McpServerView {
             h('strong', { text: srv.name, attrs: { style: 'font-size: 13px;' } }),
             badge,
           ),
-          h('div', { class: 'ui-mono ui-muted ui-small', text: srv.command, attrs: { style: 'margin-top: 2px; word-break: break-all;' } }),
+          h(
+            'div',
+            { attrs: { style: 'display: flex; align-items: center; justify-content: space-between; margin-top: 2px;' } },
+            h('span', { class: 'ui-mono ui-muted ui-small', text: srv.command, attrs: { style: 'word-break: break-all;' } }),
+            copyButton(() => srv.command, 'Copy binary command'),
+          ),
           h(
             'details',
             { attrs: { style: 'margin-top: 6px;' } },
@@ -309,7 +468,7 @@ export class McpServerView {
 
     // 2. Render Codebase Memory projects
     const cbm = d.codebaseMemory;
-    setText(this.cbmStatusBadge, cbm.available ? `${cbm.projects.length} indexed` : 'unavailable');
+    setText(this.cbmSec.extra, cbm.available ? `${cbm.projects.length} indexed` : 'unavailable');
     setText(this.projectsCount, cbm.available ? `Binary: ${cbm.binaryPath ?? 'codebase-memory-mcp'}` : 'codebase-memory-mcp binary not found');
 
     const prevProject = this.projectSelect.value;
@@ -340,14 +499,19 @@ export class McpServerView {
           'div',
           {
             attrs: {
-              style: 'display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); margin-top: 6px;',
+              style:
+                'display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); margin-top: 6px;',
             },
           },
           h(
             'div',
             { attrs: { style: 'min-width: 0; flex: 1;' } },
             h('div', { text: proj.name, attrs: { style: 'font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis;' } }),
-            h('div', { class: 'ui-mono ui-muted ui-small', text: `${proj.rootPath}${proj.branch && proj.branch !== '-' ? ` (${proj.branch})` : ''}`, attrs: { style: 'font-size: 10.5px; overflow: hidden; text-overflow: ellipsis;' } }),
+            h('div', {
+              class: 'ui-mono ui-muted ui-small',
+              text: `${proj.rootPath}${proj.branch && proj.branch !== '-' ? ` (${proj.branch})` : ''}`,
+              attrs: { style: 'font-size: 10.5px; overflow: hidden; text-overflow: ellipsis;' },
+            }),
           ),
           reindexBtn,
         );
@@ -365,7 +529,8 @@ export class McpServerView {
             type: 'button',
             class: 'ui-link-btn',
             attrs: {
-              style: 'display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); margin-bottom: 4px; text-decoration: none;',
+              style:
+                'display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); margin-bottom: 4px; text-decoration: none;',
             },
             on: {
               click: () => this.ctx.select({ type: 'agent', id: act.agentId }, { focus: true }),
@@ -380,6 +545,23 @@ export class McpServerView {
           h('span', { class: 'ui-muted ui-small', text: relativeTime(act.at, this.ctx.now()) }),
         ),
       ),
+    );
+
+    // 4. Render Specifications DL
+    const totalTools = d.servers.reduce((sum, s) => sum + s.toolCount, 0);
+    const specsItems: [string, string, string?][] = [
+      ['Config Path', d.configPath],
+      ['Protocol', 'JSON-RPC 2.0 (newline-delimited stdio)'],
+      ['HTTP Binding', '0.0.0.0:4747 (LAN + localhost)'],
+      ['Total Tools', `${totalTools} registered tools across ${d.servers.length} servers`],
+      ['Cache Root', '~/.cache/codebase-memory-mcp/'],
+    ];
+
+    this.specsDl.replaceChildren(
+      ...specsItems.flatMap(([label, value]) => [
+        h('dt', { text: label }),
+        h('dd', { class: 'ui-mono-inline', text: value }),
+      ]),
     );
   }
 

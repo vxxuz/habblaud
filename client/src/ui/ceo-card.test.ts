@@ -34,6 +34,7 @@ describe('CEO Approval Card Model & Logic', () => {
     const a1 = mockAgent('a1');
     const a2 = mockAgent('a2', {
       id: 'feature-plan',
+      name: 'feature-plan.md',
       summary: 'A new feature implementation plan',
       path: '/path/to/feature-plan.md',
       updatedAt: 1000,

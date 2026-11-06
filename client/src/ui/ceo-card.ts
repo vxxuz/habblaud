@@ -121,7 +121,7 @@ export class CeoApprovalCard {
     }, 'ui-icon-btn--sm');
 
     const docHead = h('div', { class: 'ui-ceo__doc-title' }, docTitle, copyBtn);
-    const docSummary = h('div', { class: 'ui-ceo__doc-summary', text: formatArtifactSummary(artifact.summary) });
+    const docSummary = h('div', { class: 'ui-ceo__doc-summary', text: formatArtifactSummary(artifact.summary || '') });
     const docPath = h('div', { class: 'ui-muted ui-small ui-ceo__doc-path', text: artifact.path, title: artifact.path });
     const docBox = h('div', { class: 'ui-ceo__doc' }, docHead, docSummary, docPath);
 
