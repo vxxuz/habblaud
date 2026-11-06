@@ -10,7 +10,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { PtyError, type PtyManager } from '../pty/manager';
 import { HttpError, readJson, sendJson } from './app';
-import { isLoopbackHost } from './guard';
+import { isLanOrLoopbackAddress, isLanOrLoopbackHost, isLoopbackHost } from './guard';
 import { tr } from '../../shared/i18n';
 
 /** /api/agents/:id/(stop|takeover) (ids nunca contêm '/'). */
@@ -23,10 +23,12 @@ function isLoopbackAddress(addr: string | undefined): boolean {
 }
 
 /** Motivo da recusa, ou null. */
-export function ptyRequestProblem(req: IncomingMessage): string | null {
-  if (!isLoopbackAddress(req.socket.remoteAddress)) return tr('o terminal interativo só pode ser usado no próprio computador');
+export function ptyRequestProblem(req: IncomingMessage, allowLan = false): string | null {
+  const okAddr = allowLan ? isLanOrLoopbackAddress(req.socket.remoteAddress) : isLoopbackAddress(req.socket.remoteAddress);
+  if (!okAddr) return tr('o terminal interativo só pode ser usado no próprio computador');
   const host = req.headers.host;
-  if (!isLoopbackHost(host)) return tr('abra o Habblaud por http://localhost para usar o terminal interativo');
+  const okHost = allowLan ? isLanOrLoopbackHost(host) : isLoopbackHost(host);
+  if (!okHost) return tr('abra o Habblaud por http://localhost para usar o terminal interativo');
   const origin = req.headers.origin;
   if (typeof origin === 'string') {
     let same = false;
@@ -43,7 +45,7 @@ export function ptyRequestProblem(req: IncomingMessage): string | null {
   return null;
 }
 
-export function createPtyRoutes(ptys: PtyManager): (req: IncomingMessage, res: ServerResponse, path: string) => void {
+export function createPtyRoutes(ptys: PtyManager, opts: { allowLan?: boolean } = {}): (req: IncomingMessage, res: ServerResponse, path: string) => void {
   const fail = (res: ServerResponse, err: unknown) => {
     if (res.headersSent) return void res.destroy();
     if (err instanceof HttpError || err instanceof PtyError) sendJson(res, err.status, { error: err.message });
@@ -66,7 +68,7 @@ export function createPtyRoutes(ptys: PtyManager): (req: IncomingMessage, res: S
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse, path: string) => {
-    const problem = ptyRequestProblem(req);
+    const problem = ptyRequestProblem(req, opts.allowLan);
     if (problem) throw new HttpError(403, problem);
     const method = req.method ?? 'GET';
     const action = AGENT_ACTION_ROUTE.exec(path);

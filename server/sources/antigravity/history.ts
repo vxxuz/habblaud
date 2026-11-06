@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Provider, RecentSession } from '../../../shared/types';
 import type { HistoryProvider, HistoryResolveResult, HistorySession } from '../source';
-import { createTerminalParser } from '../terminal';
+import { createAntigravityTerminalParser } from './terminal';
 import { listRecentSessions, openAntigravityDb } from './database';
 import { getAntigravityHome } from './detector';
 
@@ -98,7 +98,7 @@ export class AntigravityHistory implements HistoryProvider {
 
     const session: HistorySession = {
       path: transcriptPath,
-      createParser: () => createTerminalParser(),
+      createParser: createAntigravityTerminalParser,
     };
     return session;
   }

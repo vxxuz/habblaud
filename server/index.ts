@@ -10,7 +10,7 @@ import { codexDirsRefused, isDefaultDir } from './accounts/detect';
 import { AccountsService } from './accounts/service';
 import { isTruthy, loadConfig, messagesOffReason, terminalOffReason, worldSocketUrl } from './config';
 import { createApiHandler, sendJson } from './http/app';
-import { createRequestGuard, isLoopbackHost } from './http/guard';
+import { createRequestGuard, isLanOrLoopbackHost } from './http/guard';
 import { createRemoteGate, isRemoteRequest, loadSecret, RemoteSessions, startRemoteListener, type RemoteListener } from './http/remote';
 import { Hub } from './http/sse';
 import { createStaticHandler } from './http/static';
@@ -68,6 +68,7 @@ import { BuildingTokens } from './world/tokens';
 import { BuildingUplink } from './world/uplink';
 import { WorldViewer } from './world/viewer';
 
+process.env.HABBLAUD_ALLOW_LAN ??= '1';
 const config = loadConfig();
 const startedAt = Date.now();
 
@@ -165,7 +166,7 @@ late.office = office;
 late.agents = agents;
 // Página que pode responder pelo escritório: Host local na porta local; na remota, só com permissions liberado.
 const hub = new Hub(office, {
-  canAnswer: (req) => (isRemoteRequest(req) ? !!config.remote?.allow.has('permissions') : isLoopbackHost(req.headers.host)),
+  canAnswer: (req) => (isRemoteRequest(req) ? !!config.remote?.allow.has('permissions') : isLanOrLoopbackHost(req.headers.host)),
 });
 // "Meu dia": amostra o escritório a cada segundo e persiste em <dataDir>/stats/ (ver history/daystats.ts).
 const stats = new DayStatsService({ dir: join(config.dataDir, 'stats'), snapshot: () => hub.current() });
@@ -423,7 +424,7 @@ const api = createApiHandler({
   permissions: permissions ? createPermissionRoutes(permissions) : undefined,
   messages: messages ? createMessageRoutes(messages) : undefined,
   ceo: ceoRoutes,
-  pty: ptys ? createPtyRoutes(ptys) : undefined,
+  pty: ptys ? createPtyRoutes(ptys, { allowLan: true }) : undefined,
   spawn,
   attachments,
   dictation,
@@ -441,6 +442,7 @@ const api = createApiHandler({
   updates,
   remote: config.remote ? { is: isRemoteRequest, allows: (f) => config.remote!.allow.has(f) } : undefined,
   world: world ? createWorldRoutes(world, worldViewer, worldSocial) : undefined,
+  allowLan: true,
 });
 
 const server = http.createServer();

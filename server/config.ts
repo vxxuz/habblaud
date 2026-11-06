@@ -153,6 +153,7 @@ export function isLoopbackBind(value: string | undefined): boolean {
 export function terminalOffReason(env: NodeJS.ProcessEnv, host: string, inDocker: boolean): string | undefined {
   const flag = env.HABBLAUD_TERMINAL?.trim();
   if (flag && !isTruthy(flag)) return `HABBLAUD_TERMINAL=${flag}`;
+  if (isTruthy(env.HABBLAUD_ALLOW_LAN)) return undefined;
   if (inDocker) {
     const bind = env.HABBLAUD_BIND?.trim();
     if (!bind) return tr('HABBLAUD_BIND não chegou ao container, então a porta pode estar exposta na rede');

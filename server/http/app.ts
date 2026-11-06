@@ -8,7 +8,7 @@ import type { DayStatsService } from '../history/daystats';
 import type { Office } from '../model/office';
 import type { CodexLive } from '../sources/codex/live';
 import type { SessionLookup } from '../sources/source';
-import { isJsonContentType, isLoopbackHost } from './guard';
+import { isJsonContentType, isLanOrLoopbackAddress, isLanOrLoopbackHost, isLoopbackHost } from './guard';
 import type { RemoteFeature } from './remote';
 import { handleSessionsRoute } from './sessions';
 import type { Hub } from './sse';
@@ -98,6 +98,8 @@ export interface ApiDeps {
    * local com Host local: pela porta do celular, nem com login (403 `local_only`).
    */
   world?: (req: IncomingMessage, res: ServerResponse, url: URL) => void;
+  /** Permite acesso completo (terminal, PTY, mensagens, sessões) via IP da rede local (LAN). */
+  allowLan?: boolean;
 }
 
 /** GET /api/agents/:id/terminal (ids nunca contêm '/'). */
@@ -269,12 +271,16 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
   const terminals = deps.terminal ? deps.terminals : undefined;
 
   const isRemote = (req: IncomingMessage): boolean => !!deps.remote?.is(req);
+  const isLocalHost = (req: IncomingMessage): boolean =>
+    deps.allowLan ? isLanOrLoopbackHost(req.headers.host) : isLoopbackHost(req.headers.host);
+  const isLocalAddr = (req: IncomingMessage): boolean =>
+    deps.allowLan ? isLanOrLoopbackAddress(req.socket?.remoteAddress) : isLoopbackAddress(req.socket?.remoteAddress);
   /**
-   * A trava "pelo próprio computador": na porta local, o Host precisa ser loopback (como antes); na porta remota, só o
+   * A trava "pelo próprio computador": na porta local, o Host precisa ser loopback (ou LAN quando allowLan=true); na porta remota, só o
    * que HABBLAUD_REMOTE_ALLOW liberar (`feature` ausente = nunca pela porta remota).
    */
   const trusted = (req: IncomingMessage, feature?: RemoteFeature): boolean =>
-    isRemote(req) ? !!feature && !!deps.remote?.allows(feature) : isLoopbackHost(req.headers.host);
+    isRemote(req) ? !!feature && !!deps.remote?.allows(feature) : isLocalHost(req);
   const denied = (req: IncomingMessage, localMessage: string): string =>
     isRemote(req) ? tr('não liberado no acesso remoto (veja HABBLAUD_REMOTE_ALLOW)') : localMessage;
 
@@ -348,7 +354,7 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       if (!deps.world) {
         req.resume();
         sendJson(res, 404, { error: tr('rota desconhecida') });
-      } else if (isRemote(req) || !isLoopbackHost(req.headers.host)) {
+      } else if (isRemote(req) || !isLocalHost(req)) {
         req.resume();
         sendJson(res, 403, { error: { code: 'local_only', message: tr('o Habblaud World só é usado pelo próprio computador (http://localhost)') } });
       } else deps.world(req, res, url);
@@ -397,12 +403,12 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
         const remote = isRemote(req);
         const access: AccessInfo = {
           remote,
-          local: !remote && isLoopbackHost(req.headers.host),
+          local: !remote && isLocalHost(req),
           permissions: !!deps.permissions && trusted(req, 'permissions'),
           messages: !!deps.messages && trusted(req, 'messages'),
           terminal: !!terminals && trusted(req, 'terminal'),
           spawn: !!deps.spawn && trusted(req, 'spawn'),
-          world: !!deps.world && !!deps.terminal && !remote && isLoopbackHost(req.headers.host),
+          world: !!deps.world && !!deps.terminal && !remote && isLocalHost(req),
         };
         sendJson(res, 200, access);
       }
@@ -440,7 +446,7 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       handleSessionsRoute(req, res, path, {
         history: deps.terminal ? deps.sessions : undefined,
         terminals,
-        trusted: isRemote(req) ? trusted(req, 'terminal') : undefined,
+        trusted: isRemote(req) ? trusted(req, 'terminal') : deps.allowLan ? isLocalHost(req) : undefined,
       });
       return true;
     }

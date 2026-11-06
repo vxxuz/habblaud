@@ -5,8 +5,10 @@ import type { AgentStatus, Provider, SourceInfo } from '../../../shared/types';
 import type { AccountsService } from '../../accounts/service';
 import type { Office } from '../../model/office';
 import type { AgentSource } from '../source';
+import type { TerminalParser } from '../terminal';
 import { FileTail } from '../tail';
 import { tr } from '../../../shared/i18n';
+import { createAntigravityTerminalParser } from './terminal';
 import {
   getSessionMetadata,
   openAntigravityDb,
@@ -145,6 +147,10 @@ export class AntigravitySource implements AgentSource {
     const convId = agentId.replace(/^antigravity:/, '');
     const candidate = join(this.brainDir, convId, '.system_generated', 'logs', 'transcript.jsonl');
     return existsSync(candidate) ? candidate : undefined;
+  }
+
+  terminalParser(agentId: string): TerminalParser | undefined {
+    return agentId.startsWith('antigravity:') ? createAntigravityTerminalParser() : undefined;
   }
 
   private getDb(): DatabaseSync | undefined {

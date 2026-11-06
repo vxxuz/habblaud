@@ -56,6 +56,30 @@ export function isLoopbackHost(host: string | undefined): boolean {
   return !!name && isLoopbackName(name);
 }
 
+export function isPrivateIp(name: string): boolean {
+  return (
+    /^10(?:\.\d{1,3}){3}$/.test(name) ||
+    /^192\.168(?:\.\d{1,3}){2}$/.test(name) ||
+    /^172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}$/.test(name) ||
+    /^169\.254(?:\.\d{1,3}){2}$/.test(name) ||
+    /^fc[0-9a-f]{2}:/i.test(name) ||
+    /^fd[0-9a-f]{2}:/i.test(name) ||
+    /^fe80:/i.test(name)
+  );
+}
+
+export function isLanOrLoopbackHost(host: string | undefined): boolean {
+  if (isLoopbackHost(host)) return true;
+  const name = hostnameOf(host);
+  return !!name && (name === '0.0.0.0' || isPrivateIp(name));
+}
+
+export function isLanOrLoopbackAddress(addr: string | undefined): boolean {
+  if (!addr) return false;
+  const a = addr.replace(/^::ffff:/i, '');
+  return a === '::1' || a === '0.0.0.0' || /^127\./.test(a) || isPrivateIp(a);
+}
+
 /**
  * Host aceito? IP literal (não há DNS envolvido, logo não há rebinding), `localhost`/`*.localhost`
  * (os navegadores resolvem sempre para o loopback) ou um nome de HABBLAUD_ALLOWED_HOSTS.

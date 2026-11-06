@@ -379,8 +379,9 @@ export class PtyManager {
   /** Valida o pedido de uma sessão nova (`reserved`: vagas já prometidas a tomadas em andamento). */
   private plan(p: { cwd: unknown; account?: unknown; cols?: unknown; rows?: unknown }, reserved = 0): SpawnPlan {
     if (!this.opts.spawn) throw new PtyError(503, tr('terminal desligado: {0}', [this.opts.disabledReason ?? tr('indisponível')]));
-    if (typeof p.cwd !== 'string' || !isAbsolute(p.cwd)) throw new PtyError(400, tr('informe a pasta do projeto (caminho absoluto)'));
-    const cwd = resolve(p.cwd);
+    const rawCwd = typeof p.cwd === 'string' && /^Office\s+\d+$/i.test(p.cwd.trim()) ? process.cwd() : p.cwd;
+    if (typeof rawCwd !== 'string' || !isAbsolute(rawCwd)) throw new PtyError(400, tr('informe a pasta do projeto (caminho absoluto)'));
+    const cwd = resolve(rawCwd);
     let isDir = false;
     try {
       isDir = statSync(cwd).isDirectory();
